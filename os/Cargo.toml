@@ -11,6 +11,8 @@ bench = false
 name = "umami-os"
 test = false
 
+# TODO: can we use newer versions?
 [dependencies]
-# TODO: can we use a newer version?
 bootloader = "0.9"
+spin = { version = "0.10.0", features = ["lazy"] }
+volatile = "0.2"
