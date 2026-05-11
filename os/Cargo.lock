@@ -39,6 +39,7 @@ dependencies = [
  "bootloader",
  "spin",
  "volatile",
+ "yore",
 ]
 
 [[package]]
@@ -46,3 +47,8 @@ name = "volatile"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b06ad3ed06fef1713569d547cdbdb439eafed76341820fb0e0344f29a41945"
+
+[[package]]
+name = "yore"
+version = "1.3.0"
+source = "git+https://github.com/asmello/yore.git#047024c8df4c1150de7888320ebe03ca3a0a4028"

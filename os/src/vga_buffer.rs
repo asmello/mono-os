@@ -1,6 +1,7 @@
 use core::fmt;
 use spin::{Lazy, Mutex};
 use volatile::Volatile;
+use yore::code_pages::CP437G;
 
 pub static WRITER: Lazy<Mutex<Writer>> = Lazy::new(|| {
     Mutex::new(Writer {
@@ -82,23 +83,18 @@ pub struct Writer {
 
 impl Writer {
     pub fn write_byte(&mut self, byte: u8) {
-        match byte {
-            b'\n' => self.new_line(),
-            byte => {
-                if self.column_position >= BUFFER_WIDTH {
-                    self.new_line();
-                }
-
-                let row = BUFFER_HEIGHT - 1;
-                let col = self.column_position;
-
-                self.buffer.chars[row][col].write(ScreenChar {
-                    character: byte,
-                    color_code: self.color_code,
-                });
-                self.column_position += 1;
-            }
+        if self.column_position >= BUFFER_WIDTH {
+            self.new_line();
         }
+
+        let row = BUFFER_HEIGHT - 1;
+        let col = self.column_position;
+
+        self.buffer.chars[row][col].write(ScreenChar {
+            character: byte,
+            color_code: self.color_code,
+        });
+        self.column_position += 1;
     }
 
     fn new_line(&mut self) {
@@ -123,12 +119,13 @@ impl Writer {
     }
 
     pub fn write_string(&mut self, s: &str) {
-        for byte in s.bytes() {
-            match byte {
-                // printable ASCII byte or newline
-                0x20..=0x7e | b'\n' => self.write_byte(byte),
-                // not part of printable ASCII range
-                _ => self.write_byte(0xfe),
+        for c in s.chars() {
+            match c {
+                '\n' => self.new_line(),
+                c => {
+                    let byte = CP437G.encode_char(c).unwrap_or(0xfe);
+                    self.write_byte(byte);
+                }
             }
         }
     }

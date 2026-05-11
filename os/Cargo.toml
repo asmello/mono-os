@@ -16,3 +16,4 @@ test = false
 bootloader = "0.9"
 spin = { version = "0.10.0", features = ["lazy"] }
 volatile = "0.2"
+yore = { git = "https://github.com/asmello/yore.git", default-features = false }
