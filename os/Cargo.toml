@@ -3,17 +3,35 @@ name = "umami-os"
 version = "0.1.0"
 edition = "2024"
 
+[package.metadata.bootimage]
+test-args = [
+  "-device",
+  "isa-debug-exit,iobase=0xf4,iosize=0x04",
+  "-serial",
+  "stdio",
+  "-display",
+  "none"
+]
+test-success-exit-code = 33
+
 # no deps on test and bench since they depend on stdlib
 # compiling thusly with --all-targets gives errors, e.g.,
 # panic handler defined twice
 [[bin]]
 bench = false
 name = "umami-os"
-test = false
+test = true
 
 # TODO: can we use newer versions?
 [dependencies]
 bootloader = "0.9"
-spin = { version = "0.10.0", features = ["lazy"] }
+spin = { version = "0.10", features = ["lazy"] }
+uart_16550 = { version = "0.6", optional = true }
 volatile = "0.2"
+x86_64 = "0.14"
 yore = { git = "https://github.com/asmello/yore.git", default-features = false }
+
+[features]
+default = ["serial", "vga-text"]
+serial = ["dep:uart_16550"]
+vga-text = []

@@ -11,23 +11,6 @@ pub static WRITER: Lazy<Mutex<Writer>> = Lazy::new(|| {
     })
 });
 
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-}
-
-#[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
-    use core::fmt::Write;
-    WRITER.lock().write_fmt(args).unwrap();
-}
-
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -108,6 +91,12 @@ impl Writer {
         self.column_position = 0;
     }
 
+    pub fn clear(&mut self) {
+        for i in 0..BUFFER_HEIGHT {
+            self.clear_row(i);
+        }
+    }
+
     fn clear_row(&mut self, row: usize) {
         let blank = ScreenChar {
             character: b' ',
@@ -135,5 +124,65 @@ impl fmt::Write for Writer {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.write_string(s);
         Ok(())
+    }
+}
+
+#[macro_export]
+macro_rules! vga_print {
+    ($($arg:tt)*) => ($crate::print::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! vga_println {
+    () => ($crate::vga_print!("\n"));
+    ($($arg:tt)*) => ($crate::vga_print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+pub fn _print(args: fmt::Arguments) {
+    use core::fmt::Write;
+    crate::vga_buffer::WRITER.lock().write_fmt(args).unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        println,
+        vga_buffer::{BUFFER_HEIGHT, BUFFER_WIDTH, WRITER},
+    };
+
+    #[test_case]
+    fn println_simple() {
+        println!("println_simple output");
+    }
+
+    #[test_case]
+    fn clear() {
+        WRITER.lock().clear();
+        for i in 0..BUFFER_HEIGHT {
+            for j in 0..BUFFER_WIDTH {
+                let screen_char = WRITER.lock().buffer.chars[i][j].read();
+                assert_eq!(screen_char.character, b' ');
+            }
+        }
+    }
+
+    #[test_case]
+    fn println_many() {
+        for _ in 0..200 {
+            println!("test_println_many output");
+        }
+    }
+
+    #[test_case]
+    fn println_output() {
+        use yore::code_pages::CP437G;
+
+        let s = "Some test string that fits on a single line";
+        println!("{s}");
+        for (i, c) in s.chars().enumerate() {
+            let screen_char = WRITER.lock().buffer.chars[BUFFER_HEIGHT - 2][i].read();
+            assert_eq!(CP437G.decode_byte(screen_char.character), c);
+        }
     }
 }
