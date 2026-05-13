@@ -1,9 +1,11 @@
 #![no_std]
 #![cfg_attr(test, no_main)]
 #![feature(custom_test_frameworks)]
+#![feature(abi_x86_interrupt)]
 #![test_runner(crate::testing::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+mod interrupts;
 pub mod print;
 pub mod qemu;
 pub mod testing;
@@ -25,6 +27,11 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 #[allow(clippy::empty_loop)]
 pub extern "C" fn _start() -> ! {
+    init();
     test_main();
     loop {}
+}
+
+pub fn init() {
+    interrupts::init_idt();
 }

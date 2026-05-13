@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[test_case]
-    fn println_many() {
+    fn vga_println_many() {
         for _ in 0..200 {
             vga_println!("test_println_many output");
         }

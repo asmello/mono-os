@@ -20,6 +20,8 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 #[allow(clippy::empty_loop)]
 pub extern "C" fn _start() -> ! {
+    umami_os::init();
+
     #[cfg(test)]
     test_main();
 
