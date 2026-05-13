@@ -129,7 +129,7 @@ impl fmt::Write for Writer {
 
 #[macro_export]
 macro_rules! vga_print {
-    ($($arg:tt)*) => ($crate::print::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
 }
 
 #[macro_export]
@@ -146,14 +146,11 @@ pub fn _print(args: fmt::Arguments) {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        println,
-        vga_buffer::{BUFFER_HEIGHT, BUFFER_WIDTH, WRITER},
-    };
+    use crate::vga_buffer::{BUFFER_HEIGHT, BUFFER_WIDTH, WRITER};
 
     #[test_case]
     fn println_simple() {
-        println!("println_simple output");
+        vga_println!("println_simple output");
     }
 
     #[test_case]
@@ -170,7 +167,7 @@ mod tests {
     #[test_case]
     fn println_many() {
         for _ in 0..200 {
-            println!("test_println_many output");
+            vga_println!("test_println_many output");
         }
     }
 
@@ -179,7 +176,7 @@ mod tests {
         use yore::code_pages::CP437G;
 
         let s = "Some test string that fits on a single line";
-        println!("{s}");
+        vga_println!("{s}");
         for (i, c) in s.chars().enumerate() {
             let screen_char = WRITER.lock().buffer.chars[BUFFER_HEIGHT - 2][i].read();
             assert_eq!(CP437G.decode_byte(screen_char.character), c);

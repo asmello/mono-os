@@ -5,17 +5,19 @@
 #![reexport_test_harness_main = "test_main"]
 
 pub mod print;
+pub mod qemu;
+pub mod testing;
 
 #[cfg(feature = "serial")]
 mod serial;
 #[cfg(feature = "vga-text")]
 mod vga_buffer;
 
-pub mod testing;
-
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
+    use crate::testing::test_panic_handler;
+
     test_panic_handler(info)
 }
 
@@ -23,32 +25,6 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 #[allow(clippy::empty_loop)]
 pub extern "C" fn _start() -> ! {
-    #[cfg(test)]
     test_main();
-
     loop {}
-}
-
-#[allow(clippy::empty_loop)]
-pub fn test_panic_handler(info: &core::panic::PanicInfo) -> ! {
-    println!("[failed]\n");
-    println!("Error: {info}\n");
-    exit_qemu(QemuExitCode::Failed);
-    loop {}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u32)]
-pub enum QemuExitCode {
-    Success = 0x10,
-    Failed = 0x11,
-}
-
-pub fn exit_qemu(exit_code: QemuExitCode) {
-    use x86_64::instructions::port::Port;
-
-    unsafe {
-        let mut port = Port::new(0xf4);
-        port.write(exit_code as u32);
-    }
 }

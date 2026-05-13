@@ -1,7 +1,11 @@
-use crate::{serial_print, serial_println};
+use crate::{
+    println,
+    qemu::{QemuExitCode, exit_qemu},
+    serial_print, serial_println,
+};
 
 pub fn test_runner(tests: &[&dyn Testable]) {
-    use crate::{QemuExitCode, exit_qemu};
+    use crate::qemu::{QemuExitCode, exit_qemu};
 
     serial_println!("Running {} tests", tests.len());
     for test in tests {
@@ -26,4 +30,12 @@ where
         self();
         serial_println!("[ok]");
     }
+}
+
+#[allow(clippy::empty_loop)]
+pub fn test_panic_handler(info: &core::panic::PanicInfo) -> ! {
+    println!("[failed]\n");
+    println!("Error: {info}\n");
+    exit_qemu(QemuExitCode::Failed);
+    loop {}
 }

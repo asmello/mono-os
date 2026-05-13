@@ -14,7 +14,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    umami_os::test_panic_handler(info)
+    umami_os::testing::test_panic_handler(info)
 }
 
 #[unsafe(no_mangle)]
