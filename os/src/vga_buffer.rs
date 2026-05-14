@@ -111,6 +111,7 @@ impl Writer {
         for c in s.chars() {
             match c {
                 '\n' => self.new_line(),
+                '\t' => self.write_string("     "),
                 c => {
                     let byte = CP437G.encode_char(c).unwrap_or(0xfe);
                     self.write_byte(byte);
@@ -127,17 +128,6 @@ impl fmt::Write for Writer {
     }
 }
 
-#[macro_export]
-macro_rules! vga_print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! vga_println {
-    () => ($crate::vga_print!("\n"));
-    ($($arg:tt)*) => ($crate::vga_print!("{}\n", format_args!($($arg)*)));
-}
-
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
@@ -146,22 +136,14 @@ pub fn _print(args: fmt::Arguments) {
 
 #[cfg(test)]
 mod tests {
-    use crate::vga_buffer::{BUFFER_HEIGHT, BUFFER_WIDTH, WRITER};
+    use crate::{
+        vga_buffer::{BUFFER_HEIGHT, BUFFER_WIDTH, WRITER},
+        vga_println,
+    };
 
     #[test_case]
-    fn println_simple() {
+    fn vga_println_simple() {
         vga_println!("println_simple output");
-    }
-
-    #[test_case]
-    fn clear() {
-        WRITER.lock().clear();
-        for i in 0..BUFFER_HEIGHT {
-            for j in 0..BUFFER_WIDTH {
-                let screen_char = WRITER.lock().buffer.chars[i][j].read();
-                assert_eq!(screen_char.character, b' ');
-            }
-        }
     }
 
     #[test_case]
@@ -172,7 +154,7 @@ mod tests {
     }
 
     #[test_case]
-    fn println_output() {
+    fn vga_println_output() {
         use yore::code_pages::CP437G;
 
         let s = "Some test string that fits on a single line";
@@ -180,6 +162,17 @@ mod tests {
         for (i, c) in s.chars().enumerate() {
             let screen_char = WRITER.lock().buffer.chars[BUFFER_HEIGHT - 2][i].read();
             assert_eq!(CP437G.decode_byte(screen_char.character), c);
+        }
+    }
+
+    #[test_case]
+    fn clear() {
+        WRITER.lock().clear();
+        for i in 0..BUFFER_HEIGHT {
+            for j in 0..BUFFER_WIDTH {
+                let screen_char = WRITER.lock().buffer.chars[i][j].read();
+                assert_eq!(screen_char.character, b' ');
+            }
         }
     }
 }

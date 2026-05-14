@@ -1,4 +1,3 @@
-use crate::println;
 use spin::Lazy;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 
@@ -12,8 +11,10 @@ pub fn init_idt() {
     IDT.load();
 }
 
+#[allow(unused)]
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
-    println!("EXCEPTION: BREAKPOINT\n{stack_frame:#?}");
+    #[cfg(test)]
+    crate::tprintln!("EXCEPTION: BREAKPOINT\n{stack_frame:#?}");
 }
 
 #[cfg(test)]

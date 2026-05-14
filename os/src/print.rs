@@ -17,30 +17,59 @@ pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
 
     #[cfg(feature = "vga-text")]
-    crate::vga_buffer::WRITER.lock().write_fmt(args).unwrap();
+    crate::vga_buffer::_print(args);
 
     #[cfg(feature = "serial")]
-    crate::serial::SERIAL1.lock().write_fmt(args).unwrap();
-}
-
-#[macro_export]
-macro_rules! serial_print {
-    ($($arg:tt)*) => ($crate::print::_serial_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! serial_println {
-    () => ($crate::serial_print!("\n"));
-    ($($arg:tt)*) => ($crate::serial_print!("{}\n", format_args!($($arg)*)));
+    crate::serial::_print(args);
 }
 
 #[cfg(feature = "serial")]
-#[doc(hidden)]
-pub fn _serial_print(args: core::fmt::Arguments) {
-    use core::fmt::Write;
-    crate::serial::SERIAL1.lock().write_fmt(args).unwrap();
+mod serial {
+    #[macro_export]
+    macro_rules! serial_print {
+        ($($arg:tt)*) => ($crate::serial::_print(format_args!($($arg)*)));
+    }
+
+    #[macro_export]
+    macro_rules! serial_println {
+        () => ($crate::serial_print!("\n"));
+        ($($arg:tt)*) => ($crate::serial_print!("{}\n", format_args!($($arg)*)));
+    }
 }
 
-#[cfg(not(feature = "serial"))]
-#[doc(hidden)]
-pub fn _serial_print(_args: core::fmt::Arguments) {}
+#[cfg(feature = "vga-text")]
+mod vga {
+    #[macro_export]
+    macro_rules! vga_print {
+        ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+    }
+
+    #[macro_export]
+    macro_rules! vga_println {
+        () => ($crate::vga_print!("\n"));
+        ($($arg:tt)*) => ($crate::vga_print!("{}\n", format_args!($($arg)*)));
+    }
+}
+
+pub mod testing {
+    #[macro_export]
+    macro_rules! tprint {
+        ($($arg:tt)*) => ($crate::print::testing::_print(format_args!($($arg)*)));
+    }
+
+    #[macro_export]
+    macro_rules! tprintln {
+        () => ($crate::tprint!("\n"));
+        ($($arg:tt)*) => ($crate::tprint!("{}\n", format_args!($($arg)*)));
+    }
+
+    #[doc(hidden)]
+    pub fn _print(args: core::fmt::Arguments) {
+        use core::fmt::Write;
+
+        crate::testing::OUTPUT_CAPTURE
+            .lock()
+            .write_fmt(args)
+            .unwrap();
+    }
+}
