@@ -5,15 +5,16 @@
 #![test_runner(crate::testing::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-mod interrupts;
+pub mod gdt;
+pub mod interrupts;
 pub mod print;
 pub mod qemu;
 pub mod testing;
 
 #[cfg(feature = "serial")]
-mod serial;
+pub mod serial;
 #[cfg(feature = "vga-text")]
-mod vga_buffer;
+pub mod vga_buffer;
 
 #[cfg(test)]
 #[panic_handler]
@@ -33,5 +34,6 @@ pub extern "C" fn _start() -> ! {
 }
 
 pub fn init() {
+    gdt::init();
     interrupts::init_idt();
 }
