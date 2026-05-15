@@ -8,7 +8,7 @@
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     umami_os::println!("{info}");
-    loop {}
+    umami_os::hlt_loop();
 }
 
 #[cfg(test)]
@@ -25,7 +25,7 @@ pub extern "C" fn _start() -> ! {
     #[cfg(test)]
     test_main();
 
-    loop {}
+    umami_os::hlt_loop();
 }
 
 #[cfg(test)]

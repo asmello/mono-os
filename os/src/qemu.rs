@@ -1,3 +1,5 @@
+use crate::hlt_loop;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum QemuExitCode {
@@ -14,5 +16,5 @@ pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
         port.write(exit_code as u32);
     }
 
-    loop {}
+    hlt_loop();
 }

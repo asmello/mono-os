@@ -131,7 +131,9 @@ impl fmt::Write for Writer {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    crate::vga_buffer::WRITER.lock().write_fmt(args).unwrap();
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        crate::vga_buffer::WRITER.lock().write_fmt(args).unwrap();
+    })
 }
 
 #[cfg(test)]
@@ -155,14 +157,18 @@ mod tests {
 
     #[test_case]
     fn vga_println_output() {
+        use core::fmt::Write;
         use yore::code_pages::CP437G;
 
         let s = "Some test string that fits on a single line";
-        vga_println!("{s}");
-        for (i, c) in s.chars().enumerate() {
-            let screen_char = WRITER.lock().buffer.chars[BUFFER_HEIGHT - 2][i].read();
-            assert_eq!(CP437G.decode_byte(screen_char.character), c);
-        }
+        x86_64::instructions::interrupts::without_interrupts(|| {
+            let mut writer = WRITER.lock();
+            writeln!(writer, "\n{s}").unwrap();
+            for (i, c) in s.chars().enumerate() {
+                let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
+                assert_eq!(CP437G.decode_byte(screen_char.character), c);
+            }
+        });
     }
 
     #[test_case]

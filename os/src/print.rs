@@ -52,6 +52,7 @@ mod vga {
 }
 
 pub mod testing {
+
     #[macro_export]
     macro_rules! tprint {
         ($($arg:tt)*) => ($crate::print::testing::_print(format_args!($($arg)*)));
@@ -66,10 +67,11 @@ pub mod testing {
     #[doc(hidden)]
     pub fn _print(args: core::fmt::Arguments) {
         use core::fmt::Write;
-
-        crate::testing::OUTPUT_CAPTURE
-            .lock()
-            .write_fmt(args)
-            .unwrap();
+        x86_64::instructions::interrupts::without_interrupts(|| {
+            crate::testing::OUTPUT_CAPTURE
+                .lock()
+                .write_fmt(args)
+                .unwrap();
+        });
     }
 }

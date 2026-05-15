@@ -8,7 +8,7 @@
 #[allow(clippy::empty_loop)]
 pub extern "C" fn _start() -> ! {
     test_main();
-    loop {}
+    umami_os::hlt_loop();
 }
 
 #[panic_handler]
