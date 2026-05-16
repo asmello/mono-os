@@ -25,29 +25,31 @@
             "rust-analyzer"
             "llvm-tools-preview"
             "clippy"
+            "rustfmt"
           ];
           targets = [
-            "thumbv7em-none-eabihf"
+            "x86_64-unknown-none"
+            "x86_64-unknown-uefi"
           ];
         };
       in
       {
-        checks.fmt = pkgs.runCommand "cargo-fmt-check" {
-          nativeBuildInputs = [ nightlyToolChain ];
-        } ''
-          cd ${./os}
-          cargo fmt --check
-          touch $out
-        '';
+        checks.fmt =
+          pkgs.runCommand "cargo-fmt-check"
+            {
+              nativeBuildInputs = [ nightlyToolChain ];
+            }
+            ''
+              cd ${./os}
+              cargo fmt --check
+              touch $out
+            '';
 
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             nightlyToolChain
-            cargo-show-asm
-            cargo-expand
             cargo-bootimage
             qemu
-            just
           ];
           env = {
             RUST_SRC_PATH = "${nightlyToolChain}/lib/rustlib/src/library";

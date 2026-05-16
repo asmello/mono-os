@@ -1,0 +1,25 @@
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2024"
+
+[[test]]
+harness = false
+name = "stack_overflow"
+
+[[test]]
+name = "heap_allocation"
+
+[dependencies]
+bootloader_api = "0.11"
+linked_list_allocator = "0.10.6"
+pic8259 = "0.11.0"
+spin = { version = "0.11", features = ["lazy"] }
+uart_16550 = { version = "0.6", optional = true }
+volatile = "0.6"
+x86_64 = "0.15"
+yore = { git = "https://github.com/asmello/yore.git", default-features = false }
+
+[features]
+default = ["serial"]
+serial = ["dep:uart_16550"]
