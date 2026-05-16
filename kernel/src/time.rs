@@ -1,9 +1,7 @@
 //! SysTick-driven monotonic tick counter.
 //!
-//! Reload value 11_999 → 12_000 cycles per exception. On the LM3S6965's reset
-//! clock (PIOSC, nominally 12 MHz) that is 1 kHz; under QEMU the rate matches
-//! whatever clock the emulator runs the core at, which is in the same order.
-//! Accuracy is not a goal — `ticks()` is just a monotonically nondecreasing
+//! The reload value is derived from each board's `CCLK_HZ` constant so the
+//! tick rate is honest on hardware. `ticks()` is a monotonically nondecreasing
 //! counter that main code can poll between `wfi`s.
 
 use core::sync::atomic::{AtomicU32, Ordering};
@@ -12,11 +10,11 @@ use cortex_m_rt::exception;
 
 static TICKS: AtomicU32 = AtomicU32::new(0);
 
-const RELOAD_FOR_1_KHZ_AT_12_MHZ: u32 = 12_000 - 1;
+const TICK_HZ: u32 = 1_000;
 
 pub fn init(mut syst: SYST) {
     syst.set_clock_source(SystClkSource::Core);
-    syst.set_reload(RELOAD_FOR_1_KHZ_AT_12_MHZ);
+    syst.set_reload(crate::board::CCLK_HZ / TICK_HZ - 1);
     syst.clear_current();
     syst.enable_counter();
     syst.enable_interrupt();

@@ -43,6 +43,11 @@ const FCR_FIFO_ENABLE_AND_RESET: u32 = 0x07;
 const LSR_THRE: u32 = 1 << 5;
 const BAUD_DIVISOR_9600_AT_4MHZ: u32 = 26;
 
+/// Core clock frequency at reset: the LPC176x runs from the IRC at 4 MHz
+/// (data sheet §8.29.1.1; ±1 % trimmed) until software configures the PLL.
+/// We leave the PLL off, so CCLK = IRC = 4 MHz for the lifetime of the kernel.
+pub const CCLK_HZ: u32 = 4_000_000;
+
 pub fn init() {
     unsafe {
         ptr::write_volatile(PCONP, ptr::read_volatile(PCONP) | PCONP_PCUART0);
