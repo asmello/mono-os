@@ -4,9 +4,12 @@
 #![test_runner(kernel::testing::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-#[unsafe(no_mangle)] // don't mangle the name of this function
-#[allow(clippy::empty_loop)]
-pub extern "C" fn _start() -> ! {
+use bootloader_api::{BootInfo, entry_point};
+
+entry_point!(main, config = &kernel::BOOTLOADER_CONFIG);
+
+fn main(_boot_info: &'static mut BootInfo) -> ! {
+    kernel::init();
     test_main();
     kernel::hlt_loop();
 }

@@ -18,7 +18,6 @@ spin = { version = "0.11", features = ["lazy"] }
 uart_16550 = { version = "0.6", optional = true }
 volatile = "0.6"
 x86_64 = "0.15"
-yore = { git = "https://github.com/asmello/yore.git", default-features = false }
 
 [features]
 default = ["serial"]

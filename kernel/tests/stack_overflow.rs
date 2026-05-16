@@ -2,15 +2,18 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
-use core::panic::PanicInfo;
+use bootloader_api::{BootInfo, entry_point};
+use core::{panic::PanicInfo, ptr::NonNull};
 use kernel::{
     qemu::{QemuExitCode, exit_qemu},
     serial_print, serial_println,
 };
-use spin::Lazy;
+use spin::LazyLock;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 
-static TEST_IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
+entry_point!(main, config = &kernel::BOOTLOADER_CONFIG);
+
+static TEST_IDT: LazyLock<InterruptDescriptorTable> = LazyLock::new(|| {
     let mut idt = InterruptDescriptorTable::new();
     unsafe {
         idt.double_fault
@@ -28,8 +31,7 @@ extern "x86-interrupt" fn test_double_fault_handler(
     exit_qemu(QemuExitCode::Success);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn _start() -> ! {
+fn main(_boot_info: &'static mut BootInfo) -> ! {
     serial_print!("stack_overflow::stack_overflow...\t");
 
     kernel::gdt::init();
@@ -49,7 +51,11 @@ fn panic(info: &PanicInfo) -> ! {
 #[allow(unconditional_recursion)]
 fn stack_overflow() {
     stack_overflow(); // for each recursion, the return address is pushed
-    volatile::Volatile::new(0).read(); // prevent tail recursion optimizations
+
+    // prevent tail recursion optimizations
+    unsafe {
+        let _ = volatile::VolatilePtr::new_read_only(NonNull::new_unchecked(1 as *mut u8)).read();
+    }
 }
 
 pub fn init_test_idt() {

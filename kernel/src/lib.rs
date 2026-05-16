@@ -40,9 +40,23 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 #[cfg(test)]
-fn test_kernel_main(_boot_info: &'static mut BootInfo) -> ! {
+fn test_kernel_main(boot_info: &'static mut BootInfo) -> ! {
+    use x86_64::VirtAddr;
+
     init();
+    let mut mapper = unsafe {
+        memory::init(VirtAddr::new(
+            boot_info
+                .physical_memory_offset
+                .into_option()
+                .expect("enabled in config"),
+        ))
+    };
+    let mut frame_allocator = unsafe { memory::make_allocator(&boot_info.memory_regions) };
+    allocator::init_heap(&mut mapper, &mut frame_allocator).unwrap();
+
     test_main();
+
     hlt_loop();
 }
 

@@ -279,7 +279,6 @@ dependencies = [
  "uart_16550",
  "volatile 0.6.1",
  "x86_64",
- "yore",
 ]
 
 [[package]]
@@ -846,11 +845,6 @@ dependencies = [
  "rustversion",
  "volatile 0.4.6",
 ]
-
-[[package]]
-name = "yore"
-version = "1.3.0"
-source = "git+https://github.com/asmello/yore.git#047024c8df4c1150de7888320ebe03ca3a0a4028"
 
 [[package]]
 name = "zmij"

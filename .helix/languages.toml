@@ -3,18 +3,22 @@ command = "rust-analyzer"
 
 [language-server.rust-analyzer.config]
 cargo.extraEnv = { RUSTUP_TOOLCHAIN = "nightly" }
-diagnostics.disabled = ["inactive-code"]
-
-check.overrideCommand = [
-  "cargo", "check",
-  "-p", "kernel",
-  "--target", "x86_64-unknown-none",
+cargo.buildScripts.overrideCommand = [
+  "cargo",
+  "check",
+  "-p",
+  "kernel",
+  "--target",
+  "x86_64-unknown-none",
   "--message-format=json-diagnostic-rendered-ansi",
 ]
-
-cargo.buildScripts.overrideCommand = [
-  "cargo", "check",
-  "-p", "kernel",
-  "--target", "x86_64-unknown-none",
+diagnostics.disabled = ["inactive-code"]
+check.overrideCommand = [
+  "cargo",
+  "check",
+  "-p",
+  "kernel",
+  "--target",
+  "x86_64-unknown-none",
   "--message-format=json-diagnostic-rendered-ansi",
 ]

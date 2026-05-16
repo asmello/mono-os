@@ -1,2 +1,7 @@
 [build]
 target = "x86_64-unknown-none"
+
+[target.x86_64-unknown-none]
+# Detects host triple at runtime so the nested `cargo run` for the runner
+# crate doesn't inherit the bare-metal target set above.
+runner = "../scripts/run-kernel-test.sh"
