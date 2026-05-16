@@ -113,16 +113,10 @@ Each milestone is independently bootable on QEMU. Estimated effort for milestone
 The LPC1768 reuses the `thumbv7m-none-eabi` triple; only the linker layout and the UART driver differ. The mbed's onboard interface MCU exposes both a CMSIS-DAP debug probe and a USB CDC ACM serial port (`/dev/cu.usbmodem*`). 9600 8N1, the mbed factory default.
 
 ```sh
-# Build for the LPC1768 (the default board is QEMU, so opt out).
-cargo build --no-default-features --features lpc1768
-
-# Flash + verify + reset + exit via the mbed's DAPLink. OpenOCD's `lpc17xx.cfg`
-# turns on the lpc2000 flash driver's `calc_checksum` flag, which patches the
-# LPC vector-table checksum at offset 0x1C during programming.
-openocd \
-  -f interface/cmsis-dap.cfg \
-  -f target/lpc17xx.cfg \
-  -c "program target/thumbv7m-none-eabi/debug/kernel verify reset exit"
+# Build + flash + verify + reset via the mbed's DAPLink. OpenOCD's
+# `lpc17xx.cfg` enables the lpc2000 flash driver's `calc_checksum` flag, so
+# the LPC vector-table checksum at offset 0x1C is patched during programming.
+./scripts/flash-lpc1768.sh
 
 # In a second terminal, open the mbed's USB CDC port to see UART output:
 screen /dev/cu.usbmodem* 9600   # or tio, picocom, etc.
