@@ -20,18 +20,13 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     };
     use x86_64::VirtAddr;
 
-    kernel::init();
-    let mut mapper = unsafe {
-        memory::init(VirtAddr::new(
-            boot_info
-                .physical_memory_offset
-                .into_option()
-                .expect("enabled in config"),
-        ))
-    };
-    let mut frame_allocator = unsafe { memory::make_allocator(&boot_info.memory_regions) };
-    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
-
+    kernel::init(
+        boot_info
+            .physical_memory_offset
+            .into_option()
+            .expect("enabled in config"),
+        &boot_info.memory_regions,
+    );
     test_main();
 
     kernel::hlt_loop();

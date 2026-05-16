@@ -8,28 +8,22 @@ extern crate alloc;
 
 use bootloader_api::BootInfo;
 use kernel::{
-    BOOTLOADER_CONFIG, allocator, memory, println,
+    BOOTLOADER_CONFIG, println,
     qemu::{QemuExitCode, exit_qemu},
 };
-use x86_64::VirtAddr;
 
 bootloader_api::entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
-    kernel::init();
-
     println!("Entered kernel with boot info: {boot_info:?}");
 
-    let mut mapper = unsafe {
-        memory::init(VirtAddr::new(
-            boot_info
-                .physical_memory_offset
-                .into_option()
-                .expect("enabled in config"),
-        ))
-    };
-    let mut frame_allocator = unsafe { memory::make_allocator(&boot_info.memory_regions) };
-    allocator::init_heap(&mut mapper, &mut frame_allocator).unwrap();
+    kernel::init(
+        boot_info
+            .physical_memory_offset
+            .into_option()
+            .expect("enabled in config"),
+        &boot_info.memory_regions,
+    );
 
     #[cfg(test)]
     test_main();

@@ -9,7 +9,6 @@ use bootloader_api::{BootInfo, entry_point};
 entry_point!(main, config = &kernel::BOOTLOADER_CONFIG);
 
 fn main(_boot_info: &'static mut BootInfo) -> ! {
-    kernel::init();
     test_main();
     kernel::hlt_loop();
 }

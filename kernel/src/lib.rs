@@ -9,7 +9,7 @@ extern crate alloc;
 
 #[cfg(test)]
 use bootloader_api::BootInfo;
-use bootloader_api::{BootloaderConfig, config::Mapping};
+use bootloader_api::{BootloaderConfig, config::Mapping, info::MemoryRegions};
 
 #[cfg(test)]
 bootloader_api::entry_point!(test_kernel_main, config = &BOOTLOADER_CONFIG);
@@ -43,28 +43,27 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 fn test_kernel_main(boot_info: &'static mut BootInfo) -> ! {
     use x86_64::VirtAddr;
 
-    init();
-    let mut mapper = unsafe {
-        memory::init(VirtAddr::new(
-            boot_info
-                .physical_memory_offset
-                .into_option()
-                .expect("enabled in config"),
-        ))
-    };
-    let mut frame_allocator = unsafe { memory::make_allocator(&boot_info.memory_regions) };
-    allocator::init_heap(&mut mapper, &mut frame_allocator).unwrap();
+    init(
+        boot_info
+            .physical_memory_offset
+            .into_option()
+            .expect("enabled in config"),
+        &boot_info.memory_regions,
+    );
 
     test_main();
 
     hlt_loop();
 }
 
-pub fn init() {
+pub fn init(physical_memory_offset: u64, memory_regions: &'static MemoryRegions) {
     gdt::init();
     interrupts::init_idt();
     interrupts::pic::init();
     x86_64::instructions::interrupts::enable();
+    let mut mapper = unsafe { memory::init(x86_64::VirtAddr::new(physical_memory_offset)) };
+    let mut frame_allocator = unsafe { memory::make_allocator(memory_regions) };
+    allocator::init_heap(&mut mapper, &mut frame_allocator).unwrap();
 }
 
 pub fn hlt_loop() -> ! {
