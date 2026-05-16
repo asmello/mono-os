@@ -1,17 +1,3 @@
-[package]
-name = "mono-os"
-version = "0.1.0"
-edition = "2024"
-
 [workspace]
 members = ["kernel"]
-
-[workspace.dependencies]
-bootloader = "0.11"
-
-[dependencies]
-bootloader = { workspace = true }
-
-[build-dependencies]
-kernel = { path = "kernel", artifact = "bin", target = "x86_64-unknown-none" }
-bootloader = { workspace = true }
+resolver = "3"

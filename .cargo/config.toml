@@ -1,4 +1,6 @@
-[unstable]
-bindeps = true
-# build-std-features = ["compiler-builtins-mem"]
-# build-std = ["core", "compiler_builtins", "alloc"]
+[build]
+target = "thumbv7m-none-eabi"
+
+[target.thumbv7m-none-eabi]
+runner = "qemu-system-arm -cpu cortex-m3 -machine lm3s6965evb -nographic -semihosting-config enable=on,target=native -kernel"
+rustflags = ["-C", "link-arg=-Tlink.x"]

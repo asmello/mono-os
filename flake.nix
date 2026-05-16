@@ -28,8 +28,7 @@
             "rustfmt"
           ];
           targets = [
-            "x86_64-unknown-none"
-            "x86_64-unknown-uefi"
+            "thumbv7m-none-eabi"
           ];
         };
       in
@@ -48,7 +47,6 @@
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             nightlyToolChain
-            cargo-bootimage
             qemu
           ];
           env = {
