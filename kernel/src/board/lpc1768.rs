@@ -16,7 +16,7 @@
 //!
 //! TX path: poll LSR[5] (THRE) until set, then write THR.
 
-use core::{fmt, ptr};
+use core::ptr;
 
 const PCONP: *mut u32 = 0x400F_C0C4 as *mut u32;
 const PCLKSEL0: *mut u32 = 0x400F_C1A8 as *mut u32;
@@ -43,68 +43,46 @@ const FCR_FIFO_ENABLE_AND_RESET: u32 = 0x07;
 const LSR_THRE: u32 = 1 << 5;
 const BAUD_DIVISOR_9600_AT_4MHZ: u32 = 26;
 
-/// Core clock frequency at reset: the LPC176x runs from the IRC at 4 MHz
-/// (data sheet §8.29.1.1; ±1 % trimmed) until software configures the PLL.
-/// We leave the PLL off, so CCLK = IRC = 4 MHz for the lifetime of the kernel.
-pub const CCLK_HZ: u32 = 4_000_000;
+pub struct Lpc1768;
 
-pub fn init() {
-    unsafe {
-        ptr::write_volatile(PCONP, ptr::read_volatile(PCONP) | PCONP_PCUART0);
+impl super::Board for Lpc1768 {
+    /// Core clock frequency at reset: the LPC176x runs from the IRC at 4 MHz
+    /// (data sheet §8.29.1.1; ±1 % trimmed) until software configures the
+    /// PLL. We leave the PLL off, so CCLK = IRC = 4 MHz for the kernel.
+    const CCLK_HZ: u32 = 4_000_000;
 
-        let mut pclksel = ptr::read_volatile(PCLKSEL0);
-        pclksel = (pclksel & !PCLKSEL0_UART0_MASK) | PCLKSEL0_UART0_CCLK_DIV1;
-        ptr::write_volatile(PCLKSEL0, pclksel);
+    type Uart = Uart;
 
-        let mut pinsel = ptr::read_volatile(PINSEL0);
-        pinsel = (pinsel & !PINSEL0_P0_2_P0_3_MASK) | PINSEL0_P0_2_TXD0 | PINSEL0_P0_3_RXD0;
-        ptr::write_volatile(PINSEL0, pinsel);
+    fn init() {
+        unsafe {
+            ptr::write_volatile(PCONP, ptr::read_volatile(PCONP) | PCONP_PCUART0);
 
-        ptr::write_volatile(UART0_LCR, LCR_DLAB);
-        ptr::write_volatile(UART0_DLL, BAUD_DIVISOR_9600_AT_4MHZ);
-        ptr::write_volatile(UART0_DLM, 0);
-        ptr::write_volatile(UART0_LCR, LCR_8N1);
-        ptr::write_volatile(UART0_FCR, FCR_FIFO_ENABLE_AND_RESET);
-        ptr::write_volatile(UART0_IER, 0);
+            let mut pclksel = ptr::read_volatile(PCLKSEL0);
+            pclksel = (pclksel & !PCLKSEL0_UART0_MASK) | PCLKSEL0_UART0_CCLK_DIV1;
+            ptr::write_volatile(PCLKSEL0, pclksel);
+
+            let mut pinsel = ptr::read_volatile(PINSEL0);
+            pinsel = (pinsel & !PINSEL0_P0_2_P0_3_MASK) | PINSEL0_P0_2_TXD0 | PINSEL0_P0_3_RXD0;
+            ptr::write_volatile(PINSEL0, pinsel);
+
+            ptr::write_volatile(UART0_LCR, LCR_DLAB);
+            ptr::write_volatile(UART0_DLL, BAUD_DIVISOR_9600_AT_4MHZ);
+            ptr::write_volatile(UART0_DLM, 0);
+            ptr::write_volatile(UART0_LCR, LCR_8N1);
+            ptr::write_volatile(UART0_FCR, FCR_FIFO_ENABLE_AND_RESET);
+            ptr::write_volatile(UART0_IER, 0);
+        }
     }
 }
 
+#[derive(Default)]
 pub struct Uart;
 
-impl Uart {
-    pub const fn new() -> Self {
-        Uart
-    }
-
-    fn write_byte(&self, byte: u8) {
+impl super::Console for Uart {
+    fn write_byte(&mut self, byte: u8) {
         unsafe {
             while ptr::read_volatile(UART0_LSR) & LSR_THRE == 0 {}
             ptr::write_volatile(UART0_THR, byte as u32);
         }
     }
-}
-
-impl Default for Uart {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl fmt::Write for Uart {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        for byte in s.bytes() {
-            if byte == b'\n' {
-                self.write_byte(b'\r');
-            }
-            self.write_byte(byte);
-        }
-        Ok(())
-    }
-}
-
-#[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
-    use fmt::Write;
-    let mut uart = Uart::new();
-    let _ = uart.write_fmt(args);
 }
