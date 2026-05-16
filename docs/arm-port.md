@@ -91,8 +91,8 @@ Rough cost once the kernel boots with timer + UART: ~1 week on QEMU (Stellaris M
 ## Milestones (one commit each, mirroring the chapter cadence)
 
 1. **Hello, UART on QEMU.** `cortex-m-rt` entry, Stellaris UART, `println!("hello")` visible via `-serial mon:stdio`, `wfi` loop.
-2. **SysTick.** 1 kHz tick, `#[exception] fn SysTick()`, visible counter.
-3. **Tests under QEMU semihosting.** Custom test runner wired to `debug::exit`; port `basic_boot`; rewrite `stack_overflow` as a HardFault test.
+2. **Tests under QEMU semihosting.** Custom test runner wired to `debug::exit`; UART for test output, semihosting for exit codes; a basic integration test in `tests/`.
+3. **SysTick.** 1 kHz tick, `#[exception] fn SysTick()`, visible counter.
 4. **Heap (optional, feature-gated).** `linked_list_allocator` over a static `[u8; N]`. Port `heap_allocation` test.
 5. **Board abstraction.** Console trait + per-board UART; STM32F429 build target added (probe-rs flashing).
 6. **(Curiosity)** smoltcp on the Stellaris MAC in QEMU: ping, then TCP echo.
