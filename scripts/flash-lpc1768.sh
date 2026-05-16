@@ -11,4 +11,5 @@ cargo build --no-default-features --features lpc1768
 openocd \
   -f interface/cmsis-dap.cfg \
   -f target/lpc17xx.cfg \
-  -c "program target/thumbv7m-none-eabi/debug/kernel verify reset exit"
+  -c "adapter speed 1000" \
+  -c "program target/thumbv7m-none-eabi/debug/kernel reset exit"
