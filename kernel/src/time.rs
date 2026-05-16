@@ -7,8 +7,7 @@
 //! counter that main code can poll between `wfi`s.
 
 use core::sync::atomic::{AtomicU32, Ordering};
-use cortex_m::peripheral::SYST;
-use cortex_m::peripheral::syst::SystClkSource;
+use cortex_m::peripheral::{SYST, syst::SystClkSource};
 use cortex_m_rt::exception;
 
 static TICKS: AtomicU32 = AtomicU32::new(0);
