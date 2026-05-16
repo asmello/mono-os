@@ -7,12 +7,18 @@
 use cortex_m_rt::entry;
 
 #[cfg(not(test))]
-use panic_semihosting as _;
-
-#[cfg(not(test))]
 #[entry]
 fn main() -> ! {
     kernel::println!("hello, world");
+    kernel::wfi_loop();
+}
+
+#[cfg(not(test))]
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    kernel::println!();
+    kernel::println!("KERNEL PANIC");
+    kernel::println!("{info}");
     kernel::wfi_loop();
 }
 
