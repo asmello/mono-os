@@ -110,21 +110,26 @@ Each milestone is independently bootable on QEMU. Estimated effort for milestone
 
 ## Real hardware: mbed NXP LPC1768
 
-The LPC1768 reuses the `thumbv7m-none-eabi` triple; only the linker layout and the UART driver differ. The mbed's onboard interface MCU exposes itself as both a CMSIS-DAP debug probe (for `probe-rs`) and a USB CDC ACM serial port (for our UART output). 9600 8N1, the mbed factory default.
-
-Build for the LPC1768:
+The LPC1768 reuses the `thumbv7m-none-eabi` triple; only the linker layout and the UART driver differ. The mbed's onboard interface MCU exposes both a CMSIS-DAP debug probe and a USB CDC ACM serial port (`/dev/cu.usbmodem*`). 9600 8N1, the mbed factory default.
 
 ```sh
-# The default board is the QEMU one, so we opt out.
+# Build for the LPC1768 (the default board is QEMU, so opt out).
 cargo build --no-default-features --features lpc1768
+
+# Flash + verify + reset + exit via the mbed's DAPLink. OpenOCD's `lpc17xx.cfg`
+# turns on the lpc2000 flash driver's `calc_checksum` flag, which patches the
+# LPC vector-table checksum at offset 0x1C during programming.
+openocd \
+  -f interface/cmsis-dap.cfg \
+  -f target/lpc17xx.cfg \
+  -c "program target/thumbv7m-none-eabi/debug/kernel verify reset exit"
+
+# In a second terminal, open the mbed's USB CDC port to see UART output:
+screen /dev/cu.usbmodem* 9600   # or tio, picocom, etc.
 ```
-
-This produces a `thumbv7m-none-eabi` ELF correctly linked against the LPC1768's memory layout (512 KiB flash @ `0x00000000`, 32 KiB main SRAM @ `0x10000000`), with UART0 brought up at 9600 8N1 in `kernel::init()`.
-
-**Flashing is the open piece.** `probe-rs` 0.31 doesn't ship a chip definition for LPC1768 (probe-rs has moved on to newer NXP parts — LPC55xx, LPC54xxx). We need to supply a custom chip YAML + flash algorithm; that's the next commit's work. Until then, the LPC1768 path verifies as a build but doesn't actually flash.
 
 Notes:
 
-- `cargo run` and `cargo test` stay QEMU-only — they're the fast feedback loop. The LPC1768 path is a separate command when you want to flash hardware.
+- `cargo run` and `cargo test` stay QEMU-only — they're the fast feedback loop. The LPC1768 path is a separate command when you actually want to flash hardware.
+- We use **OpenOCD** for LPC1768 because `probe-rs` 0.31 doesn't ship a chip definition for it (probe-rs has moved on to newer NXP parts: LPC55xx, LPC54xxx). `probe-rs-tools` stays in the dev shell — it'll be our flasher for future STM32 / nRF boards. The deferred work to add LPC1768 to probe-rs is sketched in [`docs/probe-rs-lpc1768-plan.md`](probe-rs-lpc1768-plan.md).
 - The kernel runs from the LPC1768's reset clock (IRC, 4 MHz). SysTick is configured for 1 kHz at that rate, so the tick rate is honest on hardware. Under QEMU the same reload value gives a slower emulated rate.
-- Serial: once flashed, open the mbed's USB CDC port in a separate terminal — `screen /dev/cu.usbmodem* 9600` (or `tio`, `picocom`).

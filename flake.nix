@@ -48,6 +48,7 @@
           nativeBuildInputs = with pkgs; [
             nightlyToolChain
             qemu
+            openocd
             probe-rs-tools
           ];
           env = {
