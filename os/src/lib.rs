@@ -5,8 +5,15 @@
 #![test_runner(crate::testing::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+#[cfg(test)]
+use bootloader::BootInfo;
+
+#[cfg(test)]
+bootloader::entry_point!(test_kernel_main);
+
 pub mod gdt;
 pub mod interrupts;
+pub mod memory;
 pub mod print;
 pub mod qemu;
 pub mod testing;
@@ -25,9 +32,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 #[cfg(test)]
-#[unsafe(no_mangle)]
-#[allow(clippy::empty_loop)]
-pub extern "C" fn _start() -> ! {
+fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
     init();
     test_main();
     hlt_loop();

@@ -25,7 +25,7 @@ name = "stack_overflow"
 
 # TODO: can we use newer versions?
 [dependencies]
-bootloader = "0.9"
+bootloader = { version = "0.9", features = ["map_physical_memory"] }
 pc-keyboard = "0.7.0"
 pic8259 = "0.11.0"
 spin = { version = "0.10", features = ["lazy"] }
