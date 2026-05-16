@@ -6,8 +6,7 @@
 //! is still useful: on real hardware we would not want to lose bytes, and the
 //! cost in QEMU is one MMIO read per byte.
 
-use core::fmt;
-use core::ptr;
+use core::{fmt, ptr};
 
 const UART0_BASE: usize = 0x4000_C000;
 const UARTDR: *mut u32 = UART0_BASE as *mut u32;
