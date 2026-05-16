@@ -50,6 +50,7 @@
             qemu
             openocd
             probe-rs-tools
+            tio
           ];
           env = {
             RUST_SRC_PATH = "${nightlyToolChain}/lib/rustlib/src/library";
