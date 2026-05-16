@@ -1,47 +1,68 @@
-# umami-os
-Because a good os must have depth of flavour.
+# mono-os
 
-# First Session
+A Rust bare-metal kernel for ARM Cortex-M3. Runs on QEMU's `lm3s6965evb` machine and on the mbed NXP LPC1768 over the same UART path.
 
-* John is the host
-* Chapter 0
-* We use branches for our stuff
-* https://os.phil-opp.com/
-* We can use the chat for proposing depth
-* Suggestions for extra topics: abi c/rust, stack unwinding, crt0, wtf is eh_personality, does it run?
+Started from Phil Opp's [Writing an OS in Rust](https://os.phil-opp.com/) at chapter 9 (heap + async setup, x86_64). Retargeted to Cortex-M because the longer-term goal — a single deterministic user program with hand-segmented memory — fits the Cortex-M model better than x86. The retargeting plan and rationale live in [`docs/arm-port.md`](docs/arm-port.md).
 
-# How to run this group
+## Status
 
-* North Star: Going down the stack and understanding how operating systems work, in rust.
-* We meet in the office
-* Define the structure of a meeting.
-    * Ideas
-        1. Follow each chapter as homework.
-        2. We create homework for everybody between the meetings.
-        3. Chose your own adventure (riscv, own bootloader, elf-parser, abi breakage, c/rust calling conventions)
-    * It is anchored in one of the post of https://os.phil-opp.com/
-    * Each week at least one person wil be chairing, and responsible for a presentation around the topic.
-    * At the end of each meeting we decide on the homework each one will take for the next meeting
+- Boot via `cortex-m-rt` (vector table + reset handler).
+- Stellaris UART driver for QEMU, LPC 16550-style UART driver for the LPC1768.
+- SysTick at 1 kHz with a monotonic tick counter.
+- UART-routed panic handler with `file:line:col` from `PanicInfo`.
+- Custom no-std test harness; results stream over UART, pass/fail signalled to cargo via QEMU semihosting exit codes.
+- Board abstraction (`Board` + `Console` traits) — adding a third target = one source file + a `memory/<board>.x`.
 
-    * We also decide who is the next chair.
-* Create a shared repo to put out stuff. (https://github.com/ + org)
-* Create a communication channel for this group. (https://zulip.com/)
-* Research how it looks like if we all build on an actual riscv.
-    * Option 1 - https://milkv.io/duo-s
-    * Etc - https://chat.helsing.tech/c/cbdc5ad6-bab7-45ba-bf82-902f6a5522eb
+Next: heap (feature-gated `linked_list_allocator`), HardFault test, board-clock improvements. Eventually smoltcp on the LPC1768/STM32 Ethernet MAC; see [`docs/arm-port.md`](docs/arm-port.md).
 
-## Sesions
+Deferred: custom probe-rs chip definition for the LPC1768 — sketch in [`docs/probe-rs-lpc1768-plan.md`](docs/probe-rs-lpc1768-plan.md). For now we flash with OpenOCD.
 
-* 2026-04-26 Elf and [Free Standing Rust Binary](https://os.phil-opp.com/freestanding-rust-binary/) (John)
-* 2026-04-26 OS Topics and [Part1 - A minimal Rust Kernel](https://os.phil-opp.com/minimal-rust-kernel/) (Matei)
-* 2026-05-07 (Next Session) continue A minimal Rust Kernel (Matei)
+## Dev loop
 
-## Session Presenters
+The repo expects `nix develop` for the toolchain. The flake provides nightly Rust with `thumbv7m-none-eabi`, `qemu`, `openocd`, `probe-rs-tools`, and `tio`.
 
-* John ⭐
-* Matei ⭐
-* Fabu
-* Andre
-* Moe
-* Kelechi
-* Alex
+### QEMU
+
+```sh
+cargo run     # boots qemu-system-arm -machine lm3s6965evb, prints over UART
+cargo test    # runs the custom harness in QEMU; semihosting exit codes
+```
+
+### mbed LPC1768
+
+```sh
+./scripts/flash-lpc1768.sh    # builds for lpc1768, flashes via OpenOCD, resets
+tio /dev/cu.usbmodem*         # open the mbed's USB CDC port at 9600 8N1
+```
+
+OpenOCD drives the mbed's onboard CMSIS-DAP probe over SWD; UART output comes back through a separate USB CDC ACM device that the mbed interface MCU presents.
+
+## Layout
+
+```
+kernel/
+├── Cargo.toml             # features: lm3s6965evb (default) | lpc1768
+├── build.rs               # copies memory/<board>.x to OUT_DIR
+├── memory/
+│   ├── lm3s6965evb.x
+│   └── lpc1768.x
+├── src/
+│   ├── lib.rs             # kernel::init(), wfi_loop()
+│   ├── main.rs            # #[entry], UART-routed panic handler, prod loop
+│   ├── time.rs            # SysTick, tick counter, exception handler
+│   ├── print.rs           # println! macro -> board::_print
+│   ├── testing.rs         # custom test harness + test_panic_handler
+│   └── board/
+│       ├── mod.rs         # Board + Console traits, LineMode CRLF adapter
+│       ├── lm3s6965evb.rs
+│       └── lpc1768.rs
+└── tests/                 # one binary per integration test
+    ├── basic_boot.rs
+    ├── systick.rs
+    ├── should_panic.rs
+    └── ...
+```
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
