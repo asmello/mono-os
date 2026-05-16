@@ -8,6 +8,7 @@ use cortex_m_rt::entry;
 
 #[entry]
 fn main() -> ! {
+    kernel::init();
     let p = cortex_m::Peripherals::take().expect("only taken once");
     kernel::time::init(p.SYST);
     test_main();

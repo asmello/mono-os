@@ -48,6 +48,7 @@
           nativeBuildInputs = with pkgs; [
             nightlyToolChain
             qemu
+            probe-rs-tools
           ];
           env = {
             RUST_SRC_PATH = "${nightlyToolChain}/lib/rustlib/src/library";

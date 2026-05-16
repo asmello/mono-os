@@ -8,6 +8,7 @@ use cortex_m_rt::entry;
 
 #[entry]
 fn main() -> ! {
+    kernel::init();
     test_main();
     kernel::wfi_loop();
 }

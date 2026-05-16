@@ -13,6 +13,7 @@ use cortex_m_semihosting::debug;
 
 #[entry]
 fn main() -> ! {
+    kernel::init();
     kernel::print!("should_panic::panics_reach_handler...");
     cause_panic();
     kernel::println!("[failed: did not panic]");

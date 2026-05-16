@@ -6,6 +6,11 @@ edition = "2024"
 [lib]
 test = false
 
+[features]
+default = ["lm3s6965evb"]
+lm3s6965evb = []
+lpc1768 = []
+
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"

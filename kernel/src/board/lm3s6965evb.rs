@@ -13,6 +13,10 @@ const UARTDR: *mut u32 = UART0_BASE as *mut u32;
 const UARTFR: *const u32 = (UART0_BASE + 0x018) as *const u32;
 const UARTFR_TXFF: u32 = 1 << 5;
 
+pub fn init() {
+    // QEMU's emulated Stellaris UART needs no setup.
+}
+
 pub struct Uart;
 
 impl Uart {

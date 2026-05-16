@@ -9,6 +9,7 @@ use cortex_m_rt::entry;
 #[cfg(not(test))]
 #[entry]
 fn main() -> ! {
+    kernel::init();
     let p = cortex_m::Peripherals::take().expect("only taken once");
     kernel::time::init(p.SYST);
     kernel::println!("hello, world");
@@ -36,6 +37,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[cfg(test)]
 #[entry]
 fn main() -> ! {
+    kernel::init();
     test_main();
     kernel::wfi_loop();
 }
