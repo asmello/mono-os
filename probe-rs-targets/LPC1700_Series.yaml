@@ -1,0 +1,885 @@
+name: LPC1700 Series
+manufacturer:
+  id: 0x15
+  cc: 0x0
+generated_from_pack: true
+pack_file_release: 2.7.2
+variants:
+- name: LPC1751
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x8000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10002000
+    cores:
+    - main
+  flash_algorithms:
+  - lpc_iap_32
+- name: LPC1752
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x10000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10004000
+    cores:
+    - main
+  flash_algorithms:
+  - lpc_iap_64
+- name: LPC1754
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x20000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10004000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20080000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_128
+- name: LPC1756
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x40000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10004000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20080000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_256
+- name: LPC1758
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20084000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+- name: LPC1759
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20084000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+- name: LPC1763
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x40000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20084000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_256
+- name: LPC1764
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x20000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10004000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20080000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_128
+- name: LPC1765
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x40000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20084000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_256
+- name: LPC1766
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x40000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20084000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_256
+- name: LPC1767
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20084000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+- name: LPC1768
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  # IRAM1 is the CPU-local SRAM; executable. (Pack default marks it
+  # non-executable, but probe-rs needs an exec RAM region to load the
+  # flash algorithm into. Hand-patched after target-gen.)
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20084000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+- name: LPC1769
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x2007c000
+      end: 0x20084000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+- name: LPC1774
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x20000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10008000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x20000000
+      end: 0x20002000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_128
+- name: LPC1776
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x40000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10010000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x20000000
+      end: 0x20004000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_256
+- name: LPC1777
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10010000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x20000000
+      end: 0x20008000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+- name: LPC1778
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10010000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x20000000
+      end: 0x20008000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+- name: LPC1785
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x40000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10010000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x20000000
+      end: 0x20004000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_256
+- name: LPC1786
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x40000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10010000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x20000000
+      end: 0x20004000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_256
+- name: LPC1787
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10010000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x20000000
+      end: 0x20008000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+- name: LPC1788
+  cores:
+  - name: main
+    type: armv7m
+    core_access_options: !Arm
+      ap: !v1 0
+  memory_map:
+  - !Nvm
+    name: IROM1
+    range:
+      start: 0x0
+      end: 0x80000
+    cores:
+    - main
+    access:
+      write: false
+      boot: true
+  - !Ram
+    name: IRAM1
+    range:
+      start: 0x10000000
+      end: 0x10010000
+    cores:
+    - main
+    access:
+      execute: false
+  - !Ram
+    name: IRAM2
+    range:
+      start: 0x20000000
+      end: 0x20008000
+    cores:
+    - main
+    access:
+      execute: false
+  flash_algorithms:
+  - lpc_iap_512
+flash_algorithms:
+- name: lpc_iap_32
+  description: LPC17xx IAP 32kB Flash
+  default: true
+  instructions: AAsQKAHTwAgOMHBHcLVgTAAlTEQ2IGVhIUYgYF1KFDEgRpBHYGkAKAHQASBwvaBpfSJZSQAOUgFJRCcoHNAC3CAoBtEY4CgoFtBHKBTQSCgS0ApgUUnNYFBKgDoVYKoj02BVI9NgASIoKBHQBtwgKA7QJygG0QvgSUrq50coB9BIKAXQTWBFSMA4AmAAIHC9SmD45wAgcEf4tT1MMiBMRAAlByYiRmHCIUYUMTlPIEYAkbhHYGkAKAzRNCAhRmHBNUhIRABo4GAgRgCZuEdgaQAoANABIPi9+LX/95H/LE0ERk1EMiBsYClGrGAUMShgKE4PRihGsEdoaQAoDdFsYDQgrGAoYCRIOUZIRABo6GAoRrBHaGkAKADQASD4vfi1BgAURg7RYWggaOJoQBihaIkYQBghaUAYYWlAGKFpQBhAQuBhMEb/91v/EU0yIU1EaGApYKhgKUYUMQ5PKEYAkbhHaGkAKBDRbmAzIKxgKGABIIAC6GAISEhEAGgoYShGAJm4R2hpACgA0AEg+L0AAAgAAADxH/8fBAAAAADBD0DgLgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+  load_address: 0x10000008
+  pc_init: 0xd
+  pc_uninit: 0x95
+  pc_program_page: 0x11f
+  pc_erase_sector: 0xd9
+  pc_erase_all: 0x99
+  data_section_offset: 0x1a4
+  rtt_poll_interval: 0
+  flash_properties:
+    address_range:
+      start: 0x0
+      end: 0x8000
+    page_size: 0x400
+    erased_byte_value: 0xff
+    program_page_timeout: 300
+    erase_sector_timeout: 3000
+    sectors:
+    - size: 0x1000
+      address: 0x0
+- name: lpc_iap_64
+  description: LPC17xx IAP 64kB Flash
+  default: true
+  instructions: AAsQKAHTwAgOMHBHcLVgTAAlTEQ2IGVhIUYgYF1KFDEgRpBHYGkAKAHQASBwvaBpfSJZSQAOUgFJRCcoHNAC3CAoBtEY4CgoFtBHKBTQSCgS0ApgUUnNYFBKgDoVYKoj02BVI9NgASIoKBHQBtwgKA7QJygG0QvgSUrq50coB9BIKAXQTWBFSMA4AmAAIHC9SmD45wAgcEf4tT1MMiBMRAAlDyYiRmHCIUYUMTlPIEYAkbhHYGkAKAzRNCAhRmHBNUhIRABo4GAgRgCZuEdgaQAoANABIPi9+LX/95H/LE0ERk1EMiBsYClGrGAUMShgKE4PRihGsEdoaQAoDdFsYDQgrGAoYCRIOUZIRABo6GAoRrBHaGkAKADQASD4vfi1BgAURg7RYWggaOJoQBihaIkYQBghaUAYYWlAGKFpQBhAQuBhMEb/91v/EU0yIU1EaGApYKhgKUYUMQ5PKEYAkbhHaGkAKBDRbmAzIKxgKGABIIAC6GAISEhEAGgoYShGAJm4R2hpACgA0AEg+L0AAAgAAADxH/8fBAAAAADBD0DgLgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+  load_address: 0x10000008
+  pc_init: 0xd
+  pc_uninit: 0x95
+  pc_program_page: 0x11f
+  pc_erase_sector: 0xd9
+  pc_erase_all: 0x99
+  data_section_offset: 0x1a4
+  rtt_poll_interval: 0
+  flash_properties:
+    address_range:
+      start: 0x0
+      end: 0x10000
+    page_size: 0x400
+    erased_byte_value: 0xff
+    program_page_timeout: 300
+    erase_sector_timeout: 3000
+    sectors:
+    - size: 0x1000
+      address: 0x0
+- name: lpc_iap_128
+  description: LPC17xx IAP 128kB Flash
+  default: true
+  instructions: AAsQKAHTwAgOMHBHcLVgTAAlTEQ2IGVhIUYgYF1KFDEgRpBHYGkAKAHQASBwvaBpfSJZSQAOUgFJRCcoHNAC3CAoBtEY4CgoFtBHKBTQSCgS0ApgUUnNYFBKgDoVYKoj02BVI9NgASIoKBHQBtwgKA7QJygG0QvgSUrq50coB9BIKAXQTWBFSMA4AmAAIHC9SmD45wAgcEf4tT1MMiBMRAAlESYiRmHCIUYUMTlPIEYAkbhHYGkAKAzRNCAhRmHBNUhIRABo4GAgRgCZuEdgaQAoANABIPi9+LX/95H/LE0ERk1EMiBsYClGrGAUMShgKE4PRihGsEdoaQAoDdFsYDQgrGAoYCRIOUZIRABo6GAoRrBHaGkAKADQASD4vfi1BgAURg7RYWggaOJoQBihaIkYQBghaUAYYWlAGKFpQBhAQuBhMEb/91v/EU0yIU1EaGApYKhgKUYUMQ5PKEYAkbhHaGkAKBDRbmAzIKxgKGABIIAC6GAISEhEAGgoYShGAJm4R2hpACgA0AEg+L0AAAgAAADxH/8fBAAAAADBD0DgLgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+  load_address: 0x10000008
+  pc_init: 0xd
+  pc_uninit: 0x95
+  pc_program_page: 0x11f
+  pc_erase_sector: 0xd9
+  pc_erase_all: 0x99
+  data_section_offset: 0x1a4
+  rtt_poll_interval: 0
+  flash_properties:
+    address_range:
+      start: 0x0
+      end: 0x20000
+    page_size: 0x400
+    erased_byte_value: 0xff
+    program_page_timeout: 300
+    erase_sector_timeout: 3000
+    sectors:
+    - size: 0x1000
+      address: 0x0
+    - size: 0x8000
+      address: 0x10000
+- name: lpc_iap_256
+  description: LPC17xx IAP 256kB Flash
+  default: true
+  instructions: AAsQKAHTwAgOMHBHcLVgTAAlTEQ2IGVhIUYgYF1KFDEgRpBHYGkAKAHQASBwvaBpfSJZSQAOUgFJRCcoHNAC3CAoBtEY4CgoFtBHKBTQSCgS0ApgUUnNYFBKgDoVYKoj02BVI9NgASIoKBHQBtwgKA7QJygG0QvgSUrq50coB9BIKAXQTWBFSMA4AmAAIHC9SmD45wAgcEf4tT1MMiBMRAAlFSYiRmHCIUYUMTlPIEYAkbhHYGkAKAzRNCAhRmHBNUhIRABo4GAgRgCZuEdgaQAoANABIPi9+LX/95H/LE0ERk1EMiBsYClGrGAUMShgKE4PRihGsEdoaQAoDdFsYDQgrGAoYCRIOUZIRABo6GAoRrBHaGkAKADQASD4vfi1BgAURg7RYWggaOJoQBihaIkYQBghaUAYYWlAGKFpQBhAQuBhMEb/91v/EU0yIU1EaGApYKhgKUYUMQ5PKEYAkbhHaGkAKBDRbmAzIKxgKGABIIAC6GAISEhEAGgoYShGAJm4R2hpACgA0AEg+L0AAAgAAADxH/8fBAAAAADBD0DgLgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+  load_address: 0x10000008
+  pc_init: 0xd
+  pc_uninit: 0x95
+  pc_program_page: 0x11f
+  pc_erase_sector: 0xd9
+  pc_erase_all: 0x99
+  data_section_offset: 0x1a4
+  rtt_poll_interval: 0
+  flash_properties:
+    address_range:
+      start: 0x0
+      end: 0x40000
+    page_size: 0x400
+    erased_byte_value: 0xff
+    program_page_timeout: 300
+    erase_sector_timeout: 3000
+    sectors:
+    - size: 0x1000
+      address: 0x0
+    - size: 0x8000
+      address: 0x10000
+- name: lpc_iap_512
+  description: LPC17xx IAP 512kB Flash
+  default: true
+  instructions: AAsQKAHTwAgOMHBHcLVgTAAlTEQ2IGVhIUYgYF1KFDEgRpBHYGkAKAHQASBwvaBpfSJZSQAOUgFJRCcoHNAC3CAoBtEY4CgoFtBHKBTQSCgS0ApgUUnNYFBKgDoVYKoj02BVI9NgASIoKBHQBtwgKA7QJygG0QvgSUrq50coB9BIKAXQTWBFSMA4AmAAIHC9SmD45wAgcEf4tT1MMiBMRAAlHSYiRmHCIUYUMTlPIEYAkbhHYGkAKAzRNCAhRmHBNUhIRABo4GAgRgCZuEdgaQAoANABIPi9+LX/95H/LE0ERk1EMiBsYClGrGAUMShgKE4PRihGsEdoaQAoDdFsYDQgrGAoYCRIOUZIRABo6GAoRrBHaGkAKADQASD4vfi1BgAURg7RYWggaOJoQBihaIkYQBghaUAYYWlAGKFpQBhAQuBhMEb/91v/EU0yIU1EaGApYKhgKUYUMQ5PKEYAkbhHaGkAKBDRbmAzIKxgKGABIIAC6GAISEhEAGgoYShGAJm4R2hpACgA0AEg+L0AAAgAAADxH/8fBAAAAADBD0DgLgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+  load_address: 0x10000008
+  pc_init: 0xd
+  pc_uninit: 0x95
+  pc_program_page: 0x11f
+  pc_erase_sector: 0xd9
+  pc_erase_all: 0x99
+  data_section_offset: 0x1a4
+  rtt_poll_interval: 0
+  flash_properties:
+    address_range:
+      start: 0x0
+      end: 0x80000
+    page_size: 0x400
+    erased_byte_value: 0xff
+    program_page_timeout: 300
+    erase_sector_timeout: 3000
+    sectors:
+    - size: 0x1000
+      address: 0x0
+    - size: 0x8000
+      address: 0x10000

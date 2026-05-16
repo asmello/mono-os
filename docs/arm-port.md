@@ -113,9 +113,7 @@ Each milestone is independently bootable on QEMU. Estimated effort for milestone
 The LPC1768 reuses the `thumbv7m-none-eabi` triple; only the linker layout and the UART driver differ. The mbed's onboard interface MCU exposes both a CMSIS-DAP debug probe and a USB CDC ACM serial port (`/dev/cu.usbmodem*`). 9600 8N1, the mbed factory default.
 
 ```sh
-# Build + flash + verify + reset via the mbed's DAPLink. OpenOCD's
-# `lpc17xx.cfg` enables the lpc2000 flash driver's `calc_checksum` flag, so
-# the LPC vector-table checksum at offset 0x1C is patched during programming.
+# Build + flash + verify + reset via the mbed's DAPLink, then attach RTT.
 ./scripts/flash-lpc1768.sh
 
 # In a second terminal, open the mbed's USB CDC port to see UART output:
@@ -125,5 +123,6 @@ screen /dev/cu.usbmodem* 9600   # or tio, picocom, etc.
 Notes:
 
 - `cargo run` and `cargo test` stay QEMU-only — they're the fast feedback loop. The LPC1768 path is a separate command when you actually want to flash hardware.
-- We use **OpenOCD** for LPC1768 because `probe-rs` 0.31 doesn't ship a chip definition for it (probe-rs has moved on to newer NXP parts: LPC55xx, LPC54xxx). `probe-rs-tools` stays in the dev shell — it'll be our flasher for future STM32 / nRF boards. The deferred work to add LPC1768 to probe-rs is sketched in [`docs/probe-rs-lpc1768-plan.md`](probe-rs-lpc1768-plan.md).
+- We use **probe-rs** for flashing. probe-rs 0.31 doesn't ship a built-in LPC1768 chip definition (NXP coverage stops around LPC55xx / LPC54xxx), so we generate one ourselves from NXP's CMSIS-Pack and pass it at runtime via `--chip-description-path probe-rs-targets/LPC1700_Series.yaml`. The pack-derived flash algorithm (`lpc_iap_512`) handles the LPC vector-table checksum at offset `0x1C` for us. The YAML is checked in; regenerating it is a one-shot `target-gen pack` invocation against `Keil.LPC1700_DFP.*.pack`. One tweak on top of the generated YAML: we cleared the `access: execute: false` flag on the LPC1768's IRAM1, which is wrong as imported — IRAM1 is the CPU-local SRAM and probe-rs needs to execute the flash algorithm from there. (See the inline comment in the YAML.)
+- **Cleanup quirk**: every successful `probe-rs download` / `probe-rs reset` against the LPC1768 ends with `Could not clear all hardware breakpoints` / `Failed to deconfigure device during shutdown`. The data is on the chip — the SWD link goes briefly flaky after the IAP flash algorithm finishes (or after a reset releases the core), and probe-rs's `session_drop` can't read back the FP_COMP registers. Functionally cosmetic; `flash-lpc1768.sh` swallows the non-zero exit with `|| true` on both calls. OpenOCD didn't surface it because it doesn't touch the breakpoint registers on shutdown.
 - The kernel runs from the LPC1768's reset clock (IRC, 4 MHz). SysTick is configured for 1 kHz at that rate, so the tick rate is honest on hardware. Under QEMU the same reload value gives a slower emulated rate.
