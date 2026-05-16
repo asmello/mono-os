@@ -9,8 +9,19 @@ use cortex_m_rt::entry;
 #[cfg(not(test))]
 #[entry]
 fn main() -> ! {
+    let p = cortex_m::Peripherals::take().expect("only taken once");
+    kernel::time::init(p.SYST);
     kernel::println!("hello, world");
-    kernel::wfi_loop();
+
+    let mut last_second = 0u32;
+    loop {
+        let secs = kernel::time::ticks() / 1000;
+        if secs > last_second {
+            last_second = secs;
+            kernel::println!("tick {secs}");
+        }
+        cortex_m::asm::wfi();
+    }
 }
 
 #[cfg(not(test))]
