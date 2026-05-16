@@ -41,6 +41,9 @@ impl Default for Uart {
 impl fmt::Write for Uart {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for byte in s.bytes() {
+            if byte == b'\n' {
+                self.write_byte(b'\r');
+            }
             self.write_byte(byte);
         }
         Ok(())
