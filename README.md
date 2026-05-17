@@ -29,8 +29,8 @@ cargo test    # runs the custom harness in QEMU; semihosting exit codes
 ### mbed LPC1768
 
 ```sh
-./scripts/flash-lpc1768.sh    # builds for lpc1768, flashes via probe-rs, resets
-tio /dev/cu.usbmodem*         # open the mbed's USB CDC port at 9600 8N1
+./scripts/flash-lpc1768.sh      # builds for lpc1768, flashes via probe-rs, resets
+tio /dev/cu.usbmodem* -b 9600   # open the mbed's USB CDC port at 9600 8N1
 ```
 
 probe-rs drives the mbed's onboard CMSIS-DAP probe over SWD. The LPC1768 isn't in probe-rs's built-in chip database, so we supply one generated from NXP's CMSIS-Pack at [`probe-rs-targets/LPC1700_Series.yaml`](probe-rs-targets/LPC1700_Series.yaml) (the script wires the path via `PROBE_RS_CHIP_DESCRIPTION_PATH`). UART output comes back through a separate USB CDC ACM device the mbed interface MCU presents.
