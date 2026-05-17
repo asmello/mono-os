@@ -20,7 +20,10 @@ fn main() {
 
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR set by cargo"));
     fs::copy(source, out.join("memory.x")).expect("source memory.x exists and OUT_DIR is writable");
+    fs::copy("memory/device.x", out.join("device.x"))
+        .expect("memory/device.x exists and OUT_DIR is writable");
     println!("cargo:rustc-link-search={}", out.display());
     println!("cargo:rerun-if-changed={source}");
+    println!("cargo:rerun-if-changed=memory/device.x");
     println!("cargo:rerun-if-changed=build.rs");
 }

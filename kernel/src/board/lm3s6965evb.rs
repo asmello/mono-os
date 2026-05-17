@@ -1,10 +1,11 @@
-//! Blocking TX-only driver for the Stellaris UART0 on the lm3s6965evb.
+//! Board driver for the Stellaris LM3S6965 (as emulated by QEMU's
+//! `lm3s6965evb` machine).
 //!
-//! Register layout per the LM3S6965 datasheet. QEMU's `lm3s6965evb` machine
-//! emulates the UART as always-ready: writes to `UARTDR` are forwarded to the
-//! `-serial` chardev with no clock or baud-rate setup required. The TXFF poll
-//! is still useful on real hardware, and costs one MMIO read per byte under
-//! QEMU.
+//! Provides a blocking TX-only UART0 driver and a one-shot deadline timer
+//! built on General-Purpose Timer Module 0 (GPTM0, Timer A). Register
+//! layout per the LM3S6965 data sheet. QEMU emulates the UART as
+//! always-ready, but the TXFF poll is still useful on real hardware and
+//! costs one MMIO read per byte.
 
 use core::ptr;
 
@@ -12,6 +13,29 @@ const UART0_BASE: usize = 0x4000_C000;
 const UARTDR: *mut u32 = UART0_BASE as *mut u32;
 const UARTFR: *const u32 = (UART0_BASE + 0x018) as *const u32;
 const UARTFR_TXFF: u32 = 1 << 5;
+
+// System control (LM3S6965 §5.4).
+const SYSCTL_RCGC1: *mut u32 = 0x400F_E104 as *mut u32;
+const SYSCTL_RCGC1_TIMER0: u32 = 1 << 16;
+
+// GPTM0 (LM3S6965 §10.5, base 0x4003_0000).
+const GPTM0_BASE: usize = 0x4003_0000;
+const GPTMCFG: *mut u32 = GPTM0_BASE as *mut u32;
+const GPTMTAMR: *mut u32 = (GPTM0_BASE + 0x004) as *mut u32;
+const GPTMCTL: *mut u32 = (GPTM0_BASE + 0x00C) as *mut u32;
+const GPTMIMR: *mut u32 = (GPTM0_BASE + 0x018) as *mut u32;
+const GPTMICR: *mut u32 = (GPTM0_BASE + 0x024) as *mut u32;
+const GPTMTAILR: *mut u32 = (GPTM0_BASE + 0x028) as *mut u32;
+
+const GPTMCFG_32BIT: u32 = 0;
+const GPTMTAMR_ONESHOT: u32 = 0x1;
+const GPTMCTL_TAEN: u32 = 1 << 0;
+const GPTM_TATOIM: u32 = 1 << 0; // shared bit position in IMR/RIS/ICR.
+
+// NVIC set-enable register 0 (covers IRQs 0..31). GPT0A is IRQ 19.
+const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
+const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+const IRQ_GPT0A: u32 = 19;
 
 pub struct Lm3s6965evb;
 
@@ -23,6 +47,7 @@ impl super::Board for Lm3s6965evb {
     const CCLK_HZ: u32 = 12_000_000;
 
     type Uart = Uart;
+    type Timeout = Gpt0;
 
     fn init() {
         // QEMU's emulated Stellaris UART needs no setup.
@@ -40,3 +65,101 @@ impl super::Console for Uart {
         }
     }
 }
+
+/// GPTM0 Timer A as a one-shot match interrupt. `arm_in_cycles` loads the
+/// requested cycle count into GPTMTAILR and enables the timer; when it
+/// counts down to zero the timer raises TATOIM, NVIC line 19 fires, and
+/// the handler [`Gpt0aHandler`] acks the peripheral and signals the
+/// kernel via [`crate::timeout::mark_fired`].
+pub struct Gpt0;
+
+impl super::TimeoutTimer for Gpt0 {
+    fn init() {
+        unsafe {
+            // Clock the timer (no-op under QEMU, real on hardware).
+            let rcgc1 = ptr::read_volatile(SYSCTL_RCGC1);
+            ptr::write_volatile(SYSCTL_RCGC1, rcgc1 | SYSCTL_RCGC1_TIMER0);
+
+            // Leave disarmed; tests/kernel arm on demand.
+            ptr::write_volatile(GPTMCTL, 0);
+            ptr::write_volatile(GPTMCFG, GPTMCFG_32BIT);
+            ptr::write_volatile(GPTMTAMR, GPTMTAMR_ONESHOT);
+            ptr::write_volatile(GPTMIMR, 0);
+            ptr::write_volatile(GPTMICR, GPTM_TATOIM);
+
+            // NVIC: clear any stale pending bit, then enable IRQ 19.
+            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_GPT0A);
+            ptr::write_volatile(NVIC_ISER0, 1 << IRQ_GPT0A);
+        }
+    }
+
+    fn arm_in_cycles(cycles: u32) {
+        unsafe {
+            ptr::write_volatile(GPTMCTL, 0);
+            ptr::write_volatile(GPTMICR, GPTM_TATOIM);
+            // GPTMTAILR is the start value; the timer counts down to 0.
+            // A 0 reload would never trigger — clamp to 1.
+            ptr::write_volatile(GPTMTAILR, cycles.max(1));
+            ptr::write_volatile(GPTMIMR, GPTM_TATOIM);
+            ptr::write_volatile(GPTMCTL, GPTMCTL_TAEN);
+        }
+    }
+
+    fn disarm() {
+        unsafe {
+            ptr::write_volatile(GPTMCTL, 0);
+            ptr::write_volatile(GPTMIMR, 0);
+            ptr::write_volatile(GPTMICR, GPTM_TATOIM);
+            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_GPT0A);
+        }
+    }
+}
+
+/// Interrupt handler for GPT0 Timer A timeout (NVIC IRQ 19). Slotted into
+/// [`__INTERRUPTS`] below.
+#[unsafe(no_mangle)]
+extern "C" fn Gpt0aHandler() {
+    unsafe {
+        ptr::write_volatile(GPTMICR, GPTM_TATOIM);
+    }
+    crate::timeout::mark_fired();
+}
+
+unsafe extern "C" {
+    fn DefaultHandler();
+}
+
+const fn default() -> super::IrqVector {
+    super::IrqVector {
+        handler: DefaultHandler,
+    }
+}
+
+/// Device-specific interrupt vector table for the lm3s6965evb. Slots 0..18
+/// route to cortex-m-rt's `DefaultHandler`; slot 19 is GPT0 Timer A.
+#[unsafe(link_section = ".vector_table.interrupts")]
+#[unsafe(no_mangle)]
+pub static __INTERRUPTS: [super::IrqVector; 20] = [
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    default(),
+    super::IrqVector {
+        handler: Gpt0aHandler,
+    },
+];

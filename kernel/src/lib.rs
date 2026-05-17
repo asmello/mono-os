@@ -5,6 +5,7 @@ pub mod clock;
 pub mod print;
 pub mod testing;
 pub mod time;
+pub mod timeout;
 
 /// One-time board setup. Brings up the UART so `println!` works.
 pub fn init() {

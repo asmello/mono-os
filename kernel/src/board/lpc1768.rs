@@ -53,9 +53,31 @@ const PLL0CFG_M12_N1: u32 = (12 - 1) | ((1 - 1) << 16);
 // CCLKCFG (§4.7.1): CCLK divider = field + 1.
 const CCLKCFG_DIV3: u32 = 3 - 1;
 
-// PCLKSEL0 (§4.7.3): UART0 PCLK selector in bits 7:6.
+// PCLKSEL0 (§4.7.3): peripheral clock selectors. Each field is 2 bits;
+// 01 → CCLK/1. TIMER0 occupies bits 3:2, UART0 bits 7:6.
+const PCLKSEL0_TIMER0_CCLK_DIV1: u32 = 0b01 << 2;
+const PCLKSEL0_TIMER0_MASK: u32 = 0b11 << 2;
 const PCLKSEL0_UART0_CCLK_DIV1: u32 = 0b01 << 6;
 const PCLKSEL0_UART0_MASK: u32 = 0b11 << 6;
+
+// Timer0 (UM10360 ch. 21, base 0x4000_4000).
+const TIMER0_BASE: usize = 0x4000_4000;
+const T0_IR: *mut u32 = TIMER0_BASE as *mut u32;
+const T0_TCR: *mut u32 = (TIMER0_BASE + 0x04) as *mut u32;
+const T0_PR: *mut u32 = (TIMER0_BASE + 0x0C) as *mut u32;
+const T0_MCR: *mut u32 = (TIMER0_BASE + 0x14) as *mut u32;
+const T0_MR0: *mut u32 = (TIMER0_BASE + 0x18) as *mut u32;
+
+const PCONP_PCTIM0: u32 = 1 << 1;
+const TCR_ENABLE: u32 = 1 << 0;
+const TCR_RESET: u32 = 1 << 1;
+const MCR_MR0I: u32 = 1 << 0; // interrupt on MR0 match; do not stop or reset.
+const IR_MR0: u32 = 1 << 0;
+
+// NVIC (Cortex-M3 standard). TIMER0 is IRQ 1.
+const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
+const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+const IRQ_TIMER0: u32 = 1;
 
 // UART0 (UM10360 ch. 14, base 0x4000_C000).
 const UART0_BASE: usize = 0x4000_C000;
@@ -151,6 +173,7 @@ impl super::Board for Lpc1768 {
     const CCLK_HZ: u32 = 96_000_000;
 
     type Uart = Uart;
+    type Timeout = Timer0;
 
     fn init() {
         setup_clock_96mhz();
@@ -169,3 +192,87 @@ impl super::Console for Uart {
         }
     }
 }
+
+/// Timer0 as a one-shot match interrupt. PCLK_TIMER0 is set to CCLK/1
+/// (96 MHz) so the Timer Counter increments once per CCLK cycle and MR0
+/// holds the deadline in CCLK cycles directly.
+pub struct Timer0;
+
+impl super::TimeoutTimer for Timer0 {
+    fn init() {
+        unsafe {
+            // Power Timer0.
+            let pconp = ptr::read_volatile(PCONP);
+            ptr::write_volatile(PCONP, pconp | PCONP_PCTIM0);
+
+            // PCLK_TIMER0 = CCLK / 1, so 1 TC tick == 1 CCLK cycle.
+            let mut pclksel = ptr::read_volatile(PCLKSEL0);
+            pclksel = (pclksel & !PCLKSEL0_TIMER0_MASK) | PCLKSEL0_TIMER0_CCLK_DIV1;
+            ptr::write_volatile(PCLKSEL0, pclksel);
+
+            // Leave disarmed.
+            ptr::write_volatile(T0_TCR, 0);
+            ptr::write_volatile(T0_PR, 0); // no prescale
+            ptr::write_volatile(T0_MCR, 0);
+            ptr::write_volatile(T0_IR, IR_MR0);
+
+            // NVIC.
+            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_TIMER0);
+            ptr::write_volatile(NVIC_ISER0, 1 << IRQ_TIMER0);
+        }
+    }
+
+    fn arm_in_cycles(cycles: u32) {
+        unsafe {
+            // Stop, reset counter to 0, set match value, enable match
+            // interrupt, clear any prior IR, then run.
+            ptr::write_volatile(T0_TCR, 0);
+            ptr::write_volatile(T0_TCR, TCR_RESET);
+            ptr::write_volatile(T0_TCR, 0);
+            ptr::write_volatile(T0_MR0, cycles.max(1));
+            ptr::write_volatile(T0_MCR, MCR_MR0I);
+            ptr::write_volatile(T0_IR, IR_MR0);
+            ptr::write_volatile(T0_TCR, TCR_ENABLE);
+        }
+    }
+
+    fn disarm() {
+        unsafe {
+            ptr::write_volatile(T0_TCR, 0);
+            ptr::write_volatile(T0_MCR, 0);
+            ptr::write_volatile(T0_IR, IR_MR0);
+            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_TIMER0);
+        }
+    }
+}
+
+/// Interrupt handler for Timer0 (NVIC IRQ 1). Slotted into [`__INTERRUPTS`].
+#[unsafe(no_mangle)]
+extern "C" fn Timer0Handler() {
+    unsafe {
+        ptr::write_volatile(T0_IR, IR_MR0);
+    }
+    crate::timeout::mark_fired();
+}
+
+unsafe extern "C" {
+    fn DefaultHandler();
+}
+
+const fn default() -> super::IrqVector {
+    super::IrqVector {
+        handler: DefaultHandler,
+    }
+}
+
+/// Device-specific interrupt vector table for the LPC1768. We only need to
+/// extend through the highest slot we wire. Slot 0 (WDT) routes to
+/// `DefaultHandler`; slot 1 is Timer0.
+#[unsafe(link_section = ".vector_table.interrupts")]
+#[unsafe(no_mangle)]
+pub static __INTERRUPTS: [super::IrqVector; 2] = [
+    default(),
+    super::IrqVector {
+        handler: Timer0Handler,
+    },
+];
