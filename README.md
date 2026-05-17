@@ -15,11 +15,9 @@ Started from Phil Opp's [Writing an OS in Rust](https://os.phil-opp.com/) at cha
 
 Next: heap (feature-gated `linked_list_allocator`), HardFault test, board-clock improvements. Eventually smoltcp on the LPC1768/STM32 Ethernet MAC; see [`docs/arm-port.md`](docs/arm-port.md).
 
-Deferred: custom probe-rs chip definition for the LPC1768 — sketch in [`docs/probe-rs-lpc1768-plan.md`](docs/probe-rs-lpc1768-plan.md). For now we flash with OpenOCD.
-
 ## Dev loop
 
-The repo expects `nix develop` for the toolchain. The flake provides nightly Rust with `thumbv7m-none-eabi`, `qemu`, `openocd`, `probe-rs-tools`, and `tio`.
+The repo expects `nix develop` for the toolchain. The flake provides nightly Rust with `thumbv7m-none-eabi`, `qemu`, `probe-rs-tools`, and `tio`.
 
 ### QEMU
 
@@ -31,11 +29,11 @@ cargo test    # runs the custom harness in QEMU; semihosting exit codes
 ### mbed LPC1768
 
 ```sh
-./scripts/flash-lpc1768.sh    # builds for lpc1768, flashes via OpenOCD, resets
+./scripts/flash-lpc1768.sh    # builds for lpc1768, flashes via probe-rs, resets
 tio /dev/cu.usbmodem*         # open the mbed's USB CDC port at 9600 8N1
 ```
 
-OpenOCD drives the mbed's onboard CMSIS-DAP probe over SWD; UART output comes back through a separate USB CDC ACM device that the mbed interface MCU presents.
+probe-rs drives the mbed's onboard CMSIS-DAP probe over SWD. The LPC1768 isn't in probe-rs's built-in chip database, so we supply one generated from NXP's CMSIS-Pack at [`probe-rs-targets/LPC1700_Series.yaml`](probe-rs-targets/LPC1700_Series.yaml) (the script wires the path via `PROBE_RS_CHIP_DESCRIPTION_PATH`). UART output comes back through a separate USB CDC ACM device the mbed interface MCU presents.
 
 ## Layout
 
@@ -61,6 +59,13 @@ kernel/
     ├── systick.rs
     ├── should_panic.rs
     └── ...
+
+probe-rs-targets/
+└── LPC1700_Series.yaml    # chip target generated from Keil.LPC1700_DFP,
+                          # hand-patched to mark IRAM1 executable
+
+scripts/
+└── flash-lpc1768.sh       # build + probe-rs download + probe-rs reset
 ```
 
 ## License
