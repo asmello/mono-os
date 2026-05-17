@@ -11,15 +11,20 @@ use cortex_m_rt::entry;
 fn main() -> ! {
     kernel::init();
     let p = cortex_m::Peripherals::take().expect("only taken once");
+    kernel::clock::init(p.DCB, p.DWT);
     kernel::time::init(p.SYST);
     kernel::println!("hello, world");
 
     let mut last_second = 0u32;
+    let mut last_cycles = kernel::clock::cycles_now_u64();
     loop {
         let secs = kernel::time::ticks() / 1000;
         if secs > last_second {
             last_second = secs;
-            kernel::println!("tick {secs}");
+            let now_cycles = kernel::clock::cycles_now_u64();
+            let delta = now_cycles - last_cycles;
+            last_cycles = now_cycles;
+            kernel::println!("tick {secs} ({delta} cycles)");
         }
         cortex_m::asm::wfi();
     }

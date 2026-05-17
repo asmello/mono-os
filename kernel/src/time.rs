@@ -27,4 +27,5 @@ pub fn ticks() -> u32 {
 #[exception]
 fn SysTick() {
     TICKS.fetch_add(1, Ordering::Relaxed);
+    crate::clock::poll_extension();
 }

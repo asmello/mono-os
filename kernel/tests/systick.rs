@@ -10,6 +10,7 @@ use cortex_m_rt::entry;
 fn main() -> ! {
     kernel::init();
     let p = cortex_m::Peripherals::take().expect("only taken once");
+    kernel::clock::init(p.DCB, p.DWT);
     kernel::time::init(p.SYST);
     test_main();
     kernel::wfi_loop();
