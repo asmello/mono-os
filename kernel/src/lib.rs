@@ -9,7 +9,7 @@ pub mod timeout;
 
 /// One-time board setup. Brings up the UART so `println!` works.
 pub fn init() {
-    board::init();
+    <board::Mcu as board::Board>::init();
 }
 
 /// Park the core until an interrupt arrives. Returns never.

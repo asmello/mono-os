@@ -1,13 +1,20 @@
 //! Board abstraction.
 //!
 //! Each supported board provides a zero-sized marker type that implements
-//! [`Board`]. Feature flags pick exactly one of them as the [`Active`] board.
-//! The public surface (`CCLK_HZ`, `init`, `_print`) is computed from `Active`,
-//! so callers never name a specific board.
+//! [`Board`]; the feature flags pick exactly one of those as the public
+//! [`Mcu`] alias. Callers reach the active board through `Mcu::…` rather
+//! than naming a specific chip directly:
 //!
-//! Byte-level UART output goes through the [`Console`] trait. The
-//! [`LineMode`] adapter wraps any `Console` in `fmt::Write` and translates
-//! `\n` to `\r\n` so terminal output is well-formed on real serial links.
+//! ```ignore
+//! use kernel::board::{Mcu, Board, TimeoutTimer};
+//! Mcu::init();                              // calls `<Mcu as Board>::init`
+//! Mcu::Timeout::arm_in_cycles(96_000);      // calls `<Mcu as Board>::Timeout`
+//! ```
+//!
+//! Byte-level UART output goes through the [`Console`] trait, with the
+//! [`LineMode`] adapter wrapping any `Console` in `fmt::Write` and
+//! translating `\n` to `\r\n` so terminal output is well-formed on real
+//! serial links.
 
 use core::fmt;
 
@@ -29,7 +36,7 @@ pub trait Board {
     type Timeout: TimeoutTimer;
 
     /// One-time board bring-up: power, pin mux, baud, anything else the UART
-    /// (or other always-on peripherals) needs before `_print` can run.
+    /// (or other always-on peripherals) needs before `print` can run.
     fn init();
 }
 
@@ -86,34 +93,9 @@ impl<C: Console> fmt::Write for LineMode<C> {
 #[cfg(feature = "lm3s6965evb")]
 mod lm3s6965evb;
 #[cfg(feature = "lm3s6965evb")]
-type Active = lm3s6965evb::Lm3s6965evb;
+pub type Mcu = lm3s6965evb::Lm3s6965evb;
 
 #[cfg(feature = "lpc1768")]
 mod lpc1768;
 #[cfg(feature = "lpc1768")]
-type Active = lpc1768::Lpc1768;
-
-pub const CCLK_HZ: u32 = Active::CCLK_HZ;
-
-pub fn init() {
-    Active::init();
-}
-
-pub fn timeout_init() {
-    <Active as Board>::Timeout::init();
-}
-
-pub fn timeout_arm_in_cycles(cycles: u32) {
-    <Active as Board>::Timeout::arm_in_cycles(cycles);
-}
-
-pub fn timeout_disarm() {
-    <Active as Board>::Timeout::disarm();
-}
-
-#[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
-    use fmt::Write;
-    let mut writer = LineMode(<Active as Board>::Uart::default());
-    let _ = writer.write_fmt(args);
-}
+pub type Mcu = lpc1768::Lpc1768;

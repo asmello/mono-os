@@ -8,13 +8,15 @@ use core::sync::atomic::{AtomicU32, Ordering};
 use cortex_m::peripheral::{SYST, syst::SystClkSource};
 use cortex_m_rt::exception;
 
+use crate::board::{Board, Mcu};
+
 static TICKS: AtomicU32 = AtomicU32::new(0);
 
 const TICK_HZ: u32 = 1_000;
 
 pub fn init(mut syst: SYST) {
     syst.set_clock_source(SystClkSource::Core);
-    syst.set_reload(crate::board::CCLK_HZ / TICK_HZ - 1);
+    syst.set_reload(Mcu::CCLK_HZ / TICK_HZ - 1);
     syst.clear_current();
     syst.enable_counter();
     syst.enable_interrupt();
