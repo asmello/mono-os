@@ -8,6 +8,7 @@
 //! costs one MMIO read per byte.
 
 use core::ptr;
+use lm3s6965::interrupt;
 
 const UART0_BASE: usize = 0x4000_C000;
 const UARTDR: *mut u32 = UART0_BASE as *mut u32;
@@ -115,51 +116,13 @@ impl super::TimeoutTimer for Gpt0 {
     }
 }
 
-/// Interrupt handler for GPT0 Timer A timeout (NVIC IRQ 19). Slotted into
-/// [`__INTERRUPTS`] below.
-#[unsafe(no_mangle)]
-extern "C" fn Gpt0aHandler() {
+/// Interrupt handler for GPT0 Timer A timeout (NVIC IRQ 19). Routed into
+/// the lm3s6965 PAC's vector table by the `#[interrupt]` attribute, which
+/// resolves the variant against `lm3s6965::Interrupt`.
+#[interrupt]
+fn TIMER_0A() {
     unsafe {
         ptr::write_volatile(GPTMICR, GPTM_TATOIM);
     }
     crate::timeout::mark_fired();
 }
-
-unsafe extern "C" {
-    fn DefaultHandler();
-}
-
-const fn default() -> super::IrqVector {
-    super::IrqVector {
-        handler: DefaultHandler,
-    }
-}
-
-/// Device-specific interrupt vector table for the lm3s6965evb. Slots 0..18
-/// route to cortex-m-rt's `DefaultHandler`; slot 19 is GPT0 Timer A.
-#[unsafe(link_section = ".vector_table.interrupts")]
-#[unsafe(no_mangle)]
-pub static __INTERRUPTS: [super::IrqVector; 20] = [
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    default(),
-    super::IrqVector {
-        handler: Gpt0aHandler,
-    },
-];

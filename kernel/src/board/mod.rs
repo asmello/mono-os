@@ -44,19 +44,6 @@ pub trait Console {
     fn write_byte(&mut self, byte: u8);
 }
 
-/// Single entry in the Cortex-M device-interrupt vector table. The slot is
-/// either a handler function pointer or a reserved-zero word.
-///
-/// cortex-m-rt 0.7 ships a private `Vector` union of the same shape but
-/// keeps its fields `doc(hidden)`, so we mirror it here with public fields
-/// to populate `.vector_table.interrupts` directly without going through a
-/// PAC. The layout must match what the Cortex-M boot ROM expects.
-#[repr(C)]
-pub union IrqVector {
-    pub handler: unsafe extern "C" fn(),
-    pub reserved: usize,
-}
-
 /// Hardware timer programmable as a one-shot match interrupt expressed in
 /// CCLK cycles. Used to enforce per-user-program deadlines without
 /// perturbing the measurement (one IRQ at most, fired only on overflow).

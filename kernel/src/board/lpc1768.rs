@@ -16,6 +16,7 @@
 //! host's USB CDC ACM port (the `/dev/cu.usbmodem*` device).
 
 use core::ptr;
+use lpc176x::interrupt;
 
 // System control block (UM10360 §3.3, base 0x400F_C000).
 const FLASHCFG: *mut u32 = 0x400F_C000 as *mut u32;
@@ -246,33 +247,13 @@ impl super::TimeoutTimer for Timer0 {
     }
 }
 
-/// Interrupt handler for Timer0 (NVIC IRQ 1). Slotted into [`__INTERRUPTS`].
-#[unsafe(no_mangle)]
-extern "C" fn Timer0Handler() {
+/// Interrupt handler for Timer0 (NVIC IRQ 1). Routed into the local
+/// `lpc176x` PAC's vector table by the `#[interrupt]` attribute, which
+/// resolves the variant against `lpc176x::Interrupt`.
+#[interrupt]
+fn TIMER0() {
     unsafe {
         ptr::write_volatile(T0_IR, IR_MR0);
     }
     crate::timeout::mark_fired();
 }
-
-unsafe extern "C" {
-    fn DefaultHandler();
-}
-
-const fn default() -> super::IrqVector {
-    super::IrqVector {
-        handler: DefaultHandler,
-    }
-}
-
-/// Device-specific interrupt vector table for the LPC1768. We only need to
-/// extend through the highest slot we wire. Slot 0 (WDT) routes to
-/// `DefaultHandler`; slot 1 is Timer0.
-#[unsafe(link_section = ".vector_table.interrupts")]
-#[unsafe(no_mangle)]
-pub static __INTERRUPTS: [super::IrqVector; 2] = [
-    default(),
-    super::IrqVector {
-        handler: Timer0Handler,
-    },
-];

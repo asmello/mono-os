@@ -75,6 +75,26 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "cortex-m-semihosting",
+ "lm3s6965",
+ "lpc176x",
+]
+
+[[package]]
+name = "lm3s6965"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13d7ed5360fee8fd434cf7995ef1d7ad42697abb538e34383a39da8df5495446"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+]
+
+[[package]]
+name = "lpc176x"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
 ]
 
 [[package]]

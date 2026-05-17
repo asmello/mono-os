@@ -8,16 +8,18 @@ test = false
 
 [features]
 default = ["lm3s6965evb"]
-lm3s6965evb = []
-lpc1768 = []
+lm3s6965evb = ["dep:lm3s6965"]
+lpc1768 = ["dep:lpc176x"]
 
 [dependencies]
-cortex-m = "0.7"
-# `device` feature suppresses cortex-m-rt's placeholder `__INTERRUPTS` so we
-# can provide our own per-board vector table. Each board module supplies its
-# `__INTERRUPTS`; `kernel/memory/device.x` covers the link-script INCLUDE.
-cortex-m-rt = { version = "0.7", features = ["device"] }
+cortex-m.workspace = true
+# cortex-m-rt's `device` feature (enabled via the workspace dep) suppresses
+# its placeholder `__INTERRUPTS` so that each board's PAC can supply the real
+# vector table and weak-alias `device.x`.
+cortex-m-rt.workspace = true
 cortex-m-semihosting = "0.5"
+lm3s6965 = { version = "0.2", optional = true }
+lpc176x = { path = "../lpc176x", optional = true }
 
 [[test]]
 name = "should_panic"

@@ -4,11 +4,10 @@
 //! tick rate is honest on hardware. `ticks()` is a monotonically nondecreasing
 //! counter that main code can poll between `wfi`s.
 
+use crate::board::{Board, Mcu};
 use core::sync::atomic::{AtomicU32, Ordering};
 use cortex_m::peripheral::{SYST, syst::SystClkSource};
 use cortex_m_rt::exception;
-
-use crate::board::{Board, Mcu};
 
 static TICKS: AtomicU32 = AtomicU32::new(0);
 
