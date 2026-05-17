@@ -1,27 +1,63 @@
-//! Blocking TX-only driver for UART0 on the mbed NXP LPC1768.
+//! Board driver for the mbed NXP LPC1768 (Cortex-M3).
+//!
+//! `init()` brings CCLK from the 4 MHz IRC up to 96 MHz off the mbed's 12 MHz
+//! crystal via PLL0, then configures UART0 for 9600 8N1 against the new
+//! clock. Register names and sequence numbers refer to UM10360 (LPC176x/5x
+//! user manual).
+//!
+//! PLL0 sizing (UM10360 §4.5):
+//!   M = 12, N = 1 → Fcco = 2·M·Fin/N = 288 MHz (within the 275–550 MHz band).
+//!   CCLK divider = 3 → CCLK = 96 MHz. Crystal-stable, ~50 ppm.
+//!
+//! UART0 baud at 96 MHz PCLK: 96e6 / (16 · 625) = 9600, exact. The 625
+//! divisor splits to DLM = 2, DLL = 113.
 //!
 //! UART0 is wired to P0.2/P0.3, which the mbed interface MCU bridges to the
-//! USB CDC ACM device exposed to the host (the `/dev/cu.usbmodem*` port).
-//! 9600 8N1, the mbed factory default.
-//!
-//! Init sequence per LPC1768 UM10360 chapter 14:
-//!   1. PCONP[3]   — UART0 power. (Set on at reset; we re-assert for clarity.)
-//!   2. PCLKSEL0[7:6] = 01 — UART0 peripheral clock = CCLK/1 = 4 MHz at reset
-//!      (CCLK comes up on IRC, 4 MHz).
-//!   3. PINSEL0[5:4]=01, [7:6]=01 — wire P0.2→TXD0, P0.3→RXD0.
-//!   4. LCR.DLAB=1; DLL=26, DLM=0 — 4 MHz / (16·26) ≈ 9615 baud (0.2% error).
-//!   5. LCR = 0x03   — 8 bits, 1 stop, no parity, DLAB cleared.
-//!   6. FCR = 0x07   — enable + reset both FIFOs.
-//!   7. IER = 0      — interrupts off (we poll).
-//!
-//! TX path: poll LSR[5] (THRE) until set, then write THR.
+//! host's USB CDC ACM port (the `/dev/cu.usbmodem*` device).
 
 use core::ptr;
 
+// System control block (UM10360 §3.3, base 0x400F_C000).
+const FLASHCFG: *mut u32 = 0x400F_C000 as *mut u32;
+const PLL0CON: *mut u32 = 0x400F_C080 as *mut u32;
+const PLL0CFG: *mut u32 = 0x400F_C084 as *mut u32;
+const PLL0STAT: *const u32 = 0x400F_C088 as *const u32;
+const PLL0FEED: *mut u32 = 0x400F_C08C as *mut u32;
 const PCONP: *mut u32 = 0x400F_C0C4 as *mut u32;
+const CCLKCFG: *mut u32 = 0x400F_C104 as *mut u32;
+const CLKSRCSEL: *mut u32 = 0x400F_C10C as *mut u32;
+const SCS: *mut u32 = 0x400F_C1A0 as *mut u32;
 const PCLKSEL0: *mut u32 = 0x400F_C1A8 as *mut u32;
 const PINSEL0: *mut u32 = 0x4002_C000 as *mut u32;
 
+// SCS (UM10360 §3.3.2): main oscillator control.
+const SCS_OSCRANGE_MASK: u32 = 1 << 4; // 0 = 1–20 MHz, our 12 MHz fits.
+const SCS_OSCEN: u32 = 1 << 5;
+const SCS_OSCSTAT: u32 = 1 << 6;
+
+// CLKSRCSEL (§3.3.4): clock source for PLL0.
+const CLKSRCSEL_MAIN_OSC: u32 = 0b01;
+
+// PLL0 control & status (§4.5.10–13).
+const PLL0CON_PLLE: u32 = 1 << 0;
+const PLL0CON_PLLC: u32 = 1 << 1;
+const PLL0STAT_PLOCK: u32 = 1 << 26;
+
+// FLASHCFG (§3.3.7): FLASHTIM in bits 15:12. Value 4 = 5 CCLK wait states,
+// safe up to 100 MHz.
+const FLASHCFG_FLASHTIM_5CLK: u32 = 4 << 12;
+const FLASHCFG_FLASHTIM_MASK: u32 = 0xF << 12;
+
+// PLL0CFG (§4.5.11): M in bits 14:0, N in bits 23:16. Encoded as M-1 / N-1.
+const PLL0CFG_M12_N1: u32 = (12 - 1) | ((1 - 1) << 16);
+// CCLKCFG (§4.7.1): CCLK divider = field + 1.
+const CCLKCFG_DIV3: u32 = 3 - 1;
+
+// PCLKSEL0 (§4.7.3): UART0 PCLK selector in bits 7:6.
+const PCLKSEL0_UART0_CCLK_DIV1: u32 = 0b01 << 6;
+const PCLKSEL0_UART0_MASK: u32 = 0b11 << 6;
+
+// UART0 (UM10360 ch. 14, base 0x4000_C000).
 const UART0_BASE: usize = 0x4000_C000;
 const UART0_THR: *mut u32 = UART0_BASE as *mut u32;
 const UART0_DLL: *mut u32 = UART0_BASE as *mut u32;
@@ -32,8 +68,6 @@ const UART0_LCR: *mut u32 = (UART0_BASE + 0x0C) as *mut u32;
 const UART0_LSR: *const u32 = (UART0_BASE + 0x14) as *const u32;
 
 const PCONP_PCUART0: u32 = 1 << 3;
-const PCLKSEL0_UART0_CCLK_DIV1: u32 = 0b01 << 6;
-const PCLKSEL0_UART0_MASK: u32 = 0b11 << 6;
 const PINSEL0_P0_2_TXD0: u32 = 0b01 << 4;
 const PINSEL0_P0_3_RXD0: u32 = 0b01 << 6;
 const PINSEL0_P0_2_P0_3_MASK: u32 = 0xF << 4;
@@ -41,37 +75,86 @@ const LCR_DLAB: u32 = 1 << 7;
 const LCR_8N1: u32 = 0b11;
 const FCR_FIFO_ENABLE_AND_RESET: u32 = 0x07;
 const LSR_THRE: u32 = 1 << 5;
-const BAUD_DIVISOR_9600_AT_4MHZ: u32 = 26;
+const BAUD_DLM_9600_AT_96MHZ: u32 = 2;
+const BAUD_DLL_9600_AT_96MHZ: u32 = 113;
+
+unsafe fn feed_pll0() {
+    unsafe {
+        ptr::write_volatile(PLL0FEED, 0xAA);
+        ptr::write_volatile(PLL0FEED, 0x55);
+    }
+}
+
+fn setup_clock_96mhz() {
+    unsafe {
+        // Flash accelerator: raise wait states BEFORE raising CCLK, otherwise
+        // instruction fetches at 96 MHz with too few wait states will fail.
+        let flashcfg = ptr::read_volatile(FLASHCFG);
+        ptr::write_volatile(
+            FLASHCFG,
+            (flashcfg & !FLASHCFG_FLASHTIM_MASK) | FLASHCFG_FLASHTIM_5CLK,
+        );
+
+        // Enable the main oscillator (12 MHz crystal on the mbed) and wait
+        // for SCS.OSCSTAT to confirm it's stable.
+        let scs = ptr::read_volatile(SCS);
+        ptr::write_volatile(SCS, (scs & !SCS_OSCRANGE_MASK) | SCS_OSCEN);
+        while ptr::read_volatile(SCS) & SCS_OSCSTAT == 0 {}
+
+        ptr::write_volatile(CLKSRCSEL, CLKSRCSEL_MAIN_OSC);
+
+        // Configure, enable, wait for PLL0 lock.
+        ptr::write_volatile(PLL0CFG, PLL0CFG_M12_N1);
+        feed_pll0();
+        ptr::write_volatile(PLL0CON, PLL0CON_PLLE);
+        feed_pll0();
+        while ptr::read_volatile(PLL0STAT) & PLL0STAT_PLOCK == 0 {}
+
+        // CCLK divider before connecting (so CCLK doesn't briefly run at 288 MHz).
+        ptr::write_volatile(CCLKCFG, CCLKCFG_DIV3);
+
+        // Connect PLL0 to CCLK.
+        ptr::write_volatile(PLL0CON, PLL0CON_PLLE | PLL0CON_PLLC);
+        feed_pll0();
+    }
+}
+
+fn setup_uart0_9600() {
+    unsafe {
+        ptr::write_volatile(PCONP, ptr::read_volatile(PCONP) | PCONP_PCUART0);
+
+        // UART0 PCLK = CCLK / 1 = 96 MHz.
+        let mut pclksel = ptr::read_volatile(PCLKSEL0);
+        pclksel = (pclksel & !PCLKSEL0_UART0_MASK) | PCLKSEL0_UART0_CCLK_DIV1;
+        ptr::write_volatile(PCLKSEL0, pclksel);
+
+        // Pin mux: P0.2 → TXD0, P0.3 → RXD0.
+        let mut pinsel = ptr::read_volatile(PINSEL0);
+        pinsel = (pinsel & !PINSEL0_P0_2_P0_3_MASK) | PINSEL0_P0_2_TXD0 | PINSEL0_P0_3_RXD0;
+        ptr::write_volatile(PINSEL0, pinsel);
+
+        // 9600 8N1.
+        ptr::write_volatile(UART0_LCR, LCR_DLAB);
+        ptr::write_volatile(UART0_DLL, BAUD_DLL_9600_AT_96MHZ);
+        ptr::write_volatile(UART0_DLM, BAUD_DLM_9600_AT_96MHZ);
+        ptr::write_volatile(UART0_LCR, LCR_8N1);
+        ptr::write_volatile(UART0_FCR, FCR_FIFO_ENABLE_AND_RESET);
+        ptr::write_volatile(UART0_IER, 0);
+    }
+}
 
 pub struct Lpc1768;
 
 impl super::Board for Lpc1768 {
-    /// Core clock frequency at reset: the LPC176x runs from the IRC at 4 MHz
-    /// (data sheet §8.29.1.1; ±1 % trimmed) until software configures the
-    /// PLL. We leave the PLL off, so CCLK = IRC = 4 MHz for the kernel.
-    const CCLK_HZ: u32 = 4_000_000;
+    /// CCLK after `init()`: 96 MHz, sourced from the mbed's 12 MHz crystal
+    /// via PLL0 (M=12, N=1, /3). Crystal-stable, ~50 ppm.
+    const CCLK_HZ: u32 = 96_000_000;
 
     type Uart = Uart;
 
     fn init() {
-        unsafe {
-            ptr::write_volatile(PCONP, ptr::read_volatile(PCONP) | PCONP_PCUART0);
-
-            let mut pclksel = ptr::read_volatile(PCLKSEL0);
-            pclksel = (pclksel & !PCLKSEL0_UART0_MASK) | PCLKSEL0_UART0_CCLK_DIV1;
-            ptr::write_volatile(PCLKSEL0, pclksel);
-
-            let mut pinsel = ptr::read_volatile(PINSEL0);
-            pinsel = (pinsel & !PINSEL0_P0_2_P0_3_MASK) | PINSEL0_P0_2_TXD0 | PINSEL0_P0_3_RXD0;
-            ptr::write_volatile(PINSEL0, pinsel);
-
-            ptr::write_volatile(UART0_LCR, LCR_DLAB);
-            ptr::write_volatile(UART0_DLL, BAUD_DIVISOR_9600_AT_4MHZ);
-            ptr::write_volatile(UART0_DLM, 0);
-            ptr::write_volatile(UART0_LCR, LCR_8N1);
-            ptr::write_volatile(UART0_FCR, FCR_FIFO_ENABLE_AND_RESET);
-            ptr::write_volatile(UART0_IER, 0);
-        }
+        setup_clock_96mhz();
+        setup_uart0_9600();
     }
 }
 
