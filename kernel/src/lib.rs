@@ -2,6 +2,7 @@
 
 pub mod board;
 pub mod clock;
+pub mod mpu;
 pub mod print;
 pub mod testing;
 pub mod time;
