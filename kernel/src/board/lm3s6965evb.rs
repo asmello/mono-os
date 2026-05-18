@@ -124,5 +124,5 @@ fn TIMER_0A() {
     unsafe {
         ptr::write_volatile(GPTMICR, GPTM_TATOIM);
     }
-    crate::timeout::mark_fired();
+    crate::user::on_timeout_match();
 }

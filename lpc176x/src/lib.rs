@@ -14,8 +14,8 @@
 #![no_std]
 #![allow(non_camel_case_types)]
 
-pub use cortex_m_rt::interrupt;
 pub use self::Interrupt as interrupt;
+pub use cortex_m_rt::interrupt;
 
 /// Enumeration of LPC176x device-specific interrupts (NVIC IRQ numbers).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,6 +150,10 @@ pub static __INTERRUPTS: [Vector; 35] = [
     Vector { _handler: MCPWM },
     Vector { _handler: QEI },
     Vector { _handler: PLL1 },
-    Vector { _handler: USBActivity },
-    Vector { _handler: CANActivity },
+    Vector {
+        _handler: USBActivity,
+    },
+    Vector {
+        _handler: CANActivity,
+    },
 ];

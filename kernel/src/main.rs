@@ -9,11 +9,38 @@ use cortex_m_rt::entry;
 #[cfg(not(test))]
 #[entry]
 fn main() -> ! {
+    use kernel::m1_demos;
+    use kernel::user::{AbortResult, UserProgram};
+
     kernel::init();
     let p = cortex_m::Peripherals::take().expect("only taken once");
     kernel::clock::init(p.DCB, p.DWT);
     kernel::time::init(p.SYST);
+    kernel::timeout::init();
     kernel::println!("hello, world");
+
+    // Drive each M1 demo program once and report the result over UART so a
+    // human watching the console (tio /dev/cu.usbmodem*) can confirm the
+    // sandbox plumbing on real hardware. Same suite that runs as
+    // `cargo test --test m1_user` under QEMU, minus the semihosting exit.
+    let cases: &[(&str, fn() -> UserProgram)] = &[
+        ("exit_42", m1_demos::exit_42),
+        ("reads_cycles", m1_demos::reads_cycles),
+        ("touches_kernel", m1_demos::touches_kernel),
+        ("executes_data", m1_demos::executes_data),
+        ("infinite_loop", m1_demos::infinite_loop),
+    ];
+    for (name, program) in cases {
+        let AbortResult {
+            status,
+            payload,
+            cycles,
+        } = kernel::user::launch(&program());
+        kernel::println!(
+            "demo {name:<16} status={status:?} payload={payload:#010x} cycles={cycles}"
+        );
+    }
+    kernel::println!("M1 demos complete");
 
     let mut last_second = 0u32;
     let mut last_cycles = kernel::clock::cycles_now_u64();

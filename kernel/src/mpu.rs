@@ -49,9 +49,27 @@ const USER_STACK_SIZE_LOG2: u32 = 13;
 /// to the region size). Caller is responsible for that — the layout
 /// constants in [`crate::user`] satisfy it by construction.
 pub fn enable_user_regions(text_base: u32, data_base: u32, stack_base: u32) {
-    write_region(0, text_base, USER_TEXT_SIZE_LOG2, AP_PRIV_RW_UNPRIV_RO, false);
-    write_region(1, data_base, USER_DATA_SIZE_LOG2, AP_PRIV_RW_UNPRIV_RW, true);
-    write_region(2, stack_base, USER_STACK_SIZE_LOG2, AP_PRIV_RW_UNPRIV_RW, true);
+    write_region(
+        0,
+        text_base,
+        USER_TEXT_SIZE_LOG2,
+        AP_PRIV_RW_UNPRIV_RO,
+        false,
+    );
+    write_region(
+        1,
+        data_base,
+        USER_DATA_SIZE_LOG2,
+        AP_PRIV_RW_UNPRIV_RW,
+        true,
+    );
+    write_region(
+        2,
+        stack_base,
+        USER_STACK_SIZE_LOG2,
+        AP_PRIV_RW_UNPRIV_RW,
+        true,
+    );
     unsafe {
         dsb();
         ptr::write_volatile(MPU_CTRL, CTRL_ENABLE | CTRL_PRIVDEFENA);

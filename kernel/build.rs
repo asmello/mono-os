@@ -13,9 +13,9 @@ fn main() {
             "both `lm3s6965evb` and `lpc1768` features are enabled; pick exactly one (try \
              `cargo <cmd> --no-default-features --features lpc1768`)"
         ),
-        (false, false) => panic!(
-            "no board feature selected; enable exactly one of `lm3s6965evb` or `lpc1768`"
-        ),
+        (false, false) => {
+            panic!("no board feature selected; enable exactly one of `lm3s6965evb` or `lpc1768`")
+        }
     };
 
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR set by cargo"));

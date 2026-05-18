@@ -255,5 +255,5 @@ fn TIMER0() {
     unsafe {
         ptr::write_volatile(T0_IR, IR_MR0);
     }
-    crate::timeout::mark_fired();
+    crate::user::on_timeout_match();
 }
