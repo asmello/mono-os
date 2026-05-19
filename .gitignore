@@ -25,3 +25,7 @@ target
 
 .direnv
 .claude
+
+# Python (tools/)
+__pycache__/
+*.pyc

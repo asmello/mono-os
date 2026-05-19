@@ -50,6 +50,9 @@
             qemu
             probe-rs-tools
             tio
+            # tools/monolink.py uses only stdlib (zlib, termios, struct);
+            # adding python3 here so the dev shell has the interpreter.
+            python3
           ];
           env = {
             RUST_SRC_PATH = "${nightlyToolChain}/lib/rustlib/src/library";
