@@ -3,7 +3,6 @@
 pub mod board;
 pub mod clock;
 pub mod link;
-pub mod m1_demos;
 pub mod mpu;
 pub mod print;
 pub mod testing;

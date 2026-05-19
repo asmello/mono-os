@@ -144,22 +144,67 @@ pub fn init() {
     }
 }
 
-/// Run `program` to termination and report what happened.
+/// Capacity available to user code (`USER_TEXT_SIZE` minus the trampoline
+/// the kernel installs at the start of the user_text region).
+pub fn user_text_capacity() -> usize {
+    USER_TEXT_SIZE - trampoline_bytes().len()
+}
+
+/// Run `program` to termination and report what happened. Convenience over
+/// [`launch_loaded`] that handles the byte-copy itself; used by tests that
+/// already have a `&'static [u8]` source slice.
 pub fn launch(program: &UserProgram) -> AbortResult {
-    if program.text.len() > USER_TEXT_SIZE {
+    if program.text.len() > user_text_capacity() {
         return AbortResult {
             status: AbortStatus::LoadError,
             payload: program.text.len() as u32,
             cycles: 0,
         };
     }
+    let trampoline_len = trampoline_bytes().len();
+    unsafe {
+        ptr::copy_nonoverlapping(
+            program.text.as_ptr(),
+            (USER_TEXT_BASE as *mut u8).add(trampoline_len),
+            program.text.len(),
+        );
+        ptr::write_bytes(USER_DATA_BASE as *mut u8, 0, USER_DATA_SIZE);
+    }
+    launch_loaded(LoadedProgram {
+        entry_offset: program.entry_offset,
+        text_size: program.text.len() as u32,
+        data_size: 0,
+        bss_size: 0,
+        timeout_cycles: program.timeout_cycles,
+    })
+}
 
+/// A program whose bytes are already in user_text/user_data — typically
+/// because the monolink loader streamed them in. The kernel still owns
+/// trampoline installation, .bss zeroing, MPU bring-up, and dispatch.
+pub struct LoadedProgram {
+    pub entry_offset: u32,
+    pub text_size: u32,
+    pub data_size: u32,
+    pub bss_size: u32,
+    pub timeout_cycles: u32,
+}
+
+/// Launch a program that's already been loaded into user_text / user_data.
+/// The caller (typically the monolink loader) must have:
+///   * written `text_size` bytes starting at `USER_TEXT_BASE + trampoline_len`
+///   * written `data_size` bytes starting at `USER_DATA_BASE`
+///
+/// The kernel installs the trampoline, zeroes the `.bss` window after
+/// `.data`, and dispatches.
+pub fn launch_loaded(program: LoadedProgram) -> AbortResult {
     let trampoline = trampoline_bytes();
-    let total_len = trampoline.len() + program.text.len();
-    if total_len > USER_TEXT_SIZE {
+    if (program.text_size as usize) > user_text_capacity()
+        || (program.data_size as usize) + (program.bss_size as usize) > USER_DATA_SIZE
+    {
         return AbortResult {
             status: AbortStatus::LoadError,
-            payload: total_len as u32,
+            payload: program.text_size,
             cycles: 0,
         };
     }
@@ -169,12 +214,11 @@ pub fn launch(program: &UserProgram) -> AbortResult {
             USER_TEXT_BASE as *mut u8,
             trampoline.len(),
         );
-        ptr::copy_nonoverlapping(
-            program.text.as_ptr(),
-            (USER_TEXT_BASE as *mut u8).add(trampoline.len()),
-            program.text.len(),
+        ptr::write_bytes(
+            (USER_DATA_BASE as *mut u8).add(program.data_size as usize),
+            0,
+            program.bss_size as usize,
         );
-        ptr::write_bytes(USER_DATA_BASE as *mut u8, 0, USER_DATA_SIZE);
     }
 
     ABORT_STATUS.store(STATUS_OK, Ordering::Relaxed);
@@ -223,6 +267,77 @@ pub fn launch(program: &UserProgram) -> AbortResult {
         status: AbortStatus::from_raw(ABORT_STATUS.load(Ordering::Relaxed)),
         payload: ABORT_PAYLOAD.load(Ordering::Relaxed),
         cycles: delta as u64,
+    }
+}
+
+/// Streaming loader for the monolink CHUNK path. Tracks where the next
+/// byte goes (user_text first up to `text_size`, then user_data). The
+/// kernel does the `.bss` zero on launch, not here.
+pub struct Loader {
+    text_size: u32,
+    data_size: u32,
+    written: u32,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum LoaderError {
+    /// `text_size` exceeds [`user_text_capacity`].
+    TextTooLarge,
+    /// `data_size + bss_size` exceeds [`USER_DATA_SIZE`].
+    DataTooLarge,
+    /// A chunk wrote past `text_size + data_size`.
+    Overflow,
+}
+
+impl Loader {
+    pub fn new(text_size: u32, data_size: u32, bss_size: u32) -> Result<Self, LoaderError> {
+        if text_size as usize > user_text_capacity() {
+            return Err(LoaderError::TextTooLarge);
+        }
+        if (data_size as usize) + (bss_size as usize) > USER_DATA_SIZE {
+            return Err(LoaderError::DataTooLarge);
+        }
+        Ok(Self {
+            text_size,
+            data_size,
+            written: 0,
+        })
+    }
+
+    /// Append `chunk` bytes at the current write position. Returns the
+    /// new cumulative byte count, or an error if the write would exceed
+    /// `text_size + data_size`.
+    pub fn append(&mut self, chunk: &[u8]) -> Result<u32, LoaderError> {
+        let end = self
+            .written
+            .checked_add(chunk.len() as u32)
+            .ok_or(LoaderError::Overflow)?;
+        if end > self.text_size + self.data_size {
+            return Err(LoaderError::Overflow);
+        }
+        let trampoline_len = trampoline_bytes().len() as u32;
+        for (offset, &byte) in (self.written..).zip(chunk.iter()) {
+            unsafe {
+                let dst = if offset < self.text_size {
+                    (USER_TEXT_BASE + trampoline_len + offset) as *mut u8
+                } else {
+                    (USER_DATA_BASE + (offset - self.text_size)) as *mut u8
+                };
+                ptr::write_volatile(dst, byte);
+            }
+        }
+        self.written = end;
+        Ok(end)
+    }
+
+    /// Total bytes the host is expected to send (text + data init image).
+    pub fn expected_total(&self) -> u32 {
+        self.text_size + self.data_size
+    }
+
+    /// Cumulative bytes written so far.
+    pub fn written(&self) -> u32 {
+        self.written
     }
 }
 
