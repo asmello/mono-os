@@ -137,6 +137,16 @@ pub struct AbortResult {
 /// handlers (they otherwise escalate straight to HardFault and we lose the
 /// abort-reason granularity).
 pub fn init() {
+    // Trampoline length tripwire (see TRAMPOLINE_LEN). Edits to the asm
+    // block above without a matching constant update panic here at boot.
+    let start = (&raw const __user_trampoline) as *const u8 as usize;
+    let end = (&raw const __user_trampoline_end) as usize;
+    assert_eq!(
+        end - start,
+        TRAMPOLINE_LEN,
+        "trampoline length drifted; update TRAMPOLINE_LEN in user.rs",
+    );
+
     const SCB_SHCSR: *mut u32 = 0xE000_ED24 as *mut u32;
     const SHCSR_MEMFAULTENA: u32 = 1 << 16;
     const SHCSR_BUSFAULTENA: u32 = 1 << 17;
@@ -401,9 +411,11 @@ static ABORT_END_LOW: AtomicU32 = AtomicU32::new(0);
 // flash would.
 //
 // `movs` and `bx` are 16-bit Thumb-1; `msr` and `isb` are 32-bit Thumb-2.
-// Total: 12 bytes. Editing the instructions means updating `TRAMPOLINE_LEN`
-// — the `.if` directive in the asm block traps any drift at assembly time
-// so a stale constant can't go unnoticed.
+// Total: 12 bytes. Editing the instructions means updating `TRAMPOLINE_LEN`;
+// `init` checks the symbol diff at boot so a stale constant trips a panic
+// instead of going unnoticed. (A `.if`-based assembler-time check would be
+// nicer, but LLVM MC refuses to evaluate `. - label` as an absolute
+// expression at any opt-level above zero.)
 
 const TRAMPOLINE_LEN: usize = 12;
 
@@ -414,20 +426,19 @@ core::arch::global_asm!(
     .thumb
     .align 1
     .global __user_trampoline
+    .global __user_trampoline_end
 __user_trampoline:
         movs    r3, #3
         msr     control, r3
         isb
         bx      r0
-        .if (. - __user_trampoline) != {LEN}
-        .error "trampoline length changed; update TRAMPOLINE_LEN in user.rs"
-        .endif
+__user_trampoline_end:
     "#,
-    LEN = const TRAMPOLINE_LEN,
 );
 
 unsafe extern "C" {
     static __user_trampoline: [u8; TRAMPOLINE_LEN];
+    static __user_trampoline_end: u8;
 }
 
 // SAFETY: `__user_trampoline` is a `TRAMPOLINE_LEN`-byte symbol emitted
