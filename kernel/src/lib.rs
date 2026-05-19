@@ -5,6 +5,7 @@ pub mod clock;
 pub mod link;
 pub mod mpu;
 pub mod print;
+pub mod ring;
 pub mod testing;
 pub mod time;
 pub mod timeout;

@@ -16,8 +16,10 @@
 //! UART0 is wired to P0.2/P0.3, which the mbed interface MCU bridges to the
 //! host's USB CDC ACM port (the `/dev/cu.usbmodem*` device).
 
+use crate::ring::SpscRing;
 use core::ptr;
-use lpc176x::interrupt;
+use cortex_m::peripheral::NVIC;
+use lpc176x::{Interrupt, interrupt};
 
 // System control block (UM10360 §3.3, base 0x400F_C000).
 const FLASHCFG: *mut u32 = 0x400F_C000 as *mut u32;
@@ -77,11 +79,6 @@ const TCR_RESET: u32 = 1 << 1;
 const MCR_MR0I: u32 = 1 << 0; // interrupt on MR0 match; do not stop or reset.
 const IR_MR0: u32 = 1 << 0;
 
-// NVIC (Cortex-M3 standard). TIMER0 is IRQ 1.
-const NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
-const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
-const IRQ_TIMER0: u32 = 1;
-
 // UART0 (UM10360 ch. 14, base 0x4000_C000).
 const UART0_BASE: usize = 0x4000_C000;
 const UART0_RBR: *const u32 = UART0_BASE as *const u32;
@@ -109,8 +106,6 @@ const IIR_INTID_RDA: u32 = 0b0100; // Receive Data Available.
 const IIR_INTID_CTI: u32 = 0b1100; // Character Time-out Indicator.
 const BAUD_DLM_115200_AT_96MHZ: u32 = 0;
 const BAUD_DLL_115200_AT_96MHZ: u32 = 52;
-
-const IRQ_UART0: u32 = 5;
 
 unsafe fn feed_pll0() {
     unsafe {
@@ -228,11 +223,11 @@ impl super::TimeoutTimer for Timer0 {
             ptr::write_volatile(T0_PR, 0); // no prescale
             ptr::write_volatile(T0_MCR, 0);
             ptr::write_volatile(T0_IR, IR_MR0);
-
-            // NVIC.
-            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_TIMER0);
-            ptr::write_volatile(NVIC_ISER0, 1 << IRQ_TIMER0);
         }
+        NVIC::unpend(Interrupt::TIMER0);
+        // SAFETY: enabling this interrupt only signals the timeout path,
+        // which is required for the user-program sandbox to work.
+        unsafe { NVIC::unmask(Interrupt::TIMER0) };
     }
 
     fn arm_in_cycles(cycles: u32) {
@@ -254,8 +249,8 @@ impl super::TimeoutTimer for Timer0 {
             ptr::write_volatile(T0_TCR, 0);
             ptr::write_volatile(T0_MCR, 0);
             ptr::write_volatile(T0_IR, IR_MR0);
-            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_TIMER0);
         }
+        NVIC::unpend(Interrupt::TIMER0);
     }
 }
 
@@ -270,11 +265,13 @@ fn TIMER0() {
     crate::user::on_timeout_match();
 }
 
-/// UART0 receive side. The ISR drains the RX FIFO into a 512-byte ring
+/// UART0 receive side. The ISR drains the RX FIFO into [`RX_RING`]
 /// (SPSC: ISR producer, main-thread consumer); [`read_byte`] pops one
 /// without blocking. Overruns drop bytes — the host retransmits on CRC
 /// failure.
 pub struct Uart0Rx;
+
+static RX_RING: SpscRing<512> = SpscRing::new();
 
 impl super::UartRx for Uart0Rx {
     fn init() {
@@ -283,14 +280,15 @@ impl super::UartRx for Uart0Rx {
             // interrupt source. (RDA fires once the FIFO trigger level
             // is met; CTI fires for stragglers when the line goes idle.)
             ptr::write_volatile(UART0_IER, IER_RBR);
-            // NVIC: clear any stale pending and enable IRQ 5.
-            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_UART0);
-            ptr::write_volatile(NVIC_ISER0, 1 << IRQ_UART0);
         }
+        NVIC::unpend(Interrupt::UART0);
+        // SAFETY: enabling this interrupt only routes UART RX bytes into
+        // the SPSC ring; it doesn't interfere with critical sections.
+        unsafe { NVIC::unmask(Interrupt::UART0) };
     }
 
     fn read_byte() -> Option<u8> {
-        rx_ring::pop()
+        RX_RING.pop()
     }
 }
 
@@ -307,51 +305,8 @@ fn UART0() {
             }
             while ptr::read_volatile(UART0_LSR) & LSR_RDR != 0 {
                 let byte = ptr::read_volatile(UART0_RBR) as u8;
-                rx_ring::push(byte);
+                RX_RING.push(byte);
             }
         }
-    }
-}
-
-mod rx_ring {
-    //! SPSC byte ring: producer = UART0 ISR, consumer = main thread.
-    //!
-    //! Single-core, no SMP — Acquire/Release on the two indices is enough
-    //! to keep the ISR and the consumer from seeing each other's writes
-    //! out of order. Size is a power of two so wrapping is a mask.
-
-    use core::cell::UnsafeCell;
-    use core::sync::atomic::{AtomicUsize, Ordering};
-
-    const SIZE: usize = 512;
-    const MASK: usize = SIZE - 1;
-
-    struct Buf(UnsafeCell<[u8; SIZE]>);
-    unsafe impl Sync for Buf {}
-
-    static BUF: Buf = Buf(UnsafeCell::new([0; SIZE]));
-    static HEAD: AtomicUsize = AtomicUsize::new(0); // written by ISR
-    static TAIL: AtomicUsize = AtomicUsize::new(0); // written by consumer
-
-    pub fn push(byte: u8) {
-        let head = HEAD.load(Ordering::Relaxed);
-        let tail = TAIL.load(Ordering::Acquire);
-        let next = (head + 1) & MASK;
-        if next == tail {
-            return; // ring full; drop byte
-        }
-        unsafe { (*BUF.0.get())[head] = byte };
-        HEAD.store(next, Ordering::Release);
-    }
-
-    pub fn pop() -> Option<u8> {
-        let tail = TAIL.load(Ordering::Relaxed);
-        let head = HEAD.load(Ordering::Acquire);
-        if head == tail {
-            return None;
-        }
-        let byte = unsafe { (*BUF.0.get())[tail] };
-        TAIL.store((tail + 1) & MASK, Ordering::Release);
-        Some(byte)
     }
 }
