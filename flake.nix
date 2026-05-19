@@ -47,6 +47,9 @@
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             nightlyToolChain
+            # `cargo objdump` / `objcopy` / `size` / `nm`. Resolves the
+            # llvm tools via `llvm-tools-preview` in the toolchain above.
+            cargo-binutils
             qemu
             probe-rs-tools
             tio
