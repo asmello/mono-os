@@ -77,6 +77,7 @@ dependencies = [
  "cortex-m-semihosting",
  "lm3s6965",
  "lpc176x",
+ "monolink-proto",
 ]
 
 [[package]]
@@ -96,6 +97,10 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
 ]
+
+[[package]]
+name = "monolink-proto"
+version = "0.1.0"
 
 [[package]]
 name = "nb"

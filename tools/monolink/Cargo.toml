@@ -1,0 +1,16 @@
+[package]
+name = "monolink"
+version = "0.1.0"
+edition = "2024"
+description = "Host loader for the monolink wire protocol — ships a .bin to the device and prints the RESULT."
+
+[[bin]]
+name = "monolink"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+libc = "0.2"
+monolink-proto = { path = "../../monolink-proto" }
+nix = { version = "0.30", features = ["poll", "term"] }

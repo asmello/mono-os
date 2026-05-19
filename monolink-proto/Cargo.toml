@@ -1,0 +1,11 @@
+[package]
+name = "monolink-proto"
+version = "0.1.0"
+edition = "2024"
+description = "Shared wire-format types and CRC32 for the monolink loader (kernel + host)."
+
+[lib]
+# Tests for the shared types live in kernel/src/link.rs (under the kernel's
+# QEMU/semihosting harness). Disabling the default libtest harness here keeps
+# `cargo test --workspace` from trying to link std for thumbv7m-none-eabi.
+test = false

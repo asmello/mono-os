@@ -29,7 +29,7 @@ fn main() -> ! {
     let mut session: Option<(Loader, ExecHeader)> = None;
 
     loop {
-        match parser.poll() {
+        match link::poll(&mut parser) {
             Poll::Pending => {
                 cortex_m::asm::wfi();
             }
