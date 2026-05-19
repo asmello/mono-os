@@ -2,6 +2,7 @@
 command = "rust-analyzer"
 
 [language-server.rust-analyzer.config]
+cargo.features = "all"
 cargo.extraEnv = { RUSTUP_TOOLCHAIN = "nightly" }
 cargo.buildScripts.overrideCommand = [
   "cargo",
