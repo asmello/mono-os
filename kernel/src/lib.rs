@@ -1,4 +1,8 @@
 #![no_std]
+#![cfg_attr(test, no_main)]
+#![cfg_attr(test, feature(custom_test_frameworks))]
+#![cfg_attr(test, test_runner(crate::testing::test_runner))]
+#![cfg_attr(test, reexport_test_harness_main = "test_main")]
 
 pub mod board;
 pub mod clock;
@@ -29,4 +33,18 @@ pub fn wfi_loop() -> ! {
     loop {
         cortex_m::asm::wfi();
     }
+}
+
+#[cfg(test)]
+#[cortex_m_rt::entry]
+fn main() -> ! {
+    init();
+    test_main();
+    wfi_loop();
+}
+
+#[cfg(test)]
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    testing::test_panic_handler(info)
 }

@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-test = false
+# The lib gets its own test binary (custom test framework wired in lib.rs),
+# so module-private tests can live next to the code they exercise.
 
 [features]
 default = ["lm3s6965evb"]
