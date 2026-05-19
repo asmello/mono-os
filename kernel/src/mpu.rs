@@ -34,7 +34,8 @@ const AP_PRIV_RW_UNPRIV_RO: u32 = 0b010;
 const AP_PRIV_RW_UNPRIV_RW: u32 = 0b011;
 
 // TEX/S/C/B for Normal, Non-shareable, Write-back, Write-allocate (B3.5.6).
-const ATTRS_NORMAL_WB: u32 = (0b000 << 19) | (0 << 18) | (1 << 17) | (1 << 16);
+// Layout: TEX=0b000 [21:19], S=0 [18], C=1 [17], B=1 [16].
+const ATTRS_NORMAL_WB: u32 = (1 << 17) | (1 << 16);
 
 /// Region 0 carries the user `.text` and is fixed at 4 KiB.
 const USER_TEXT_SIZE_LOG2: u32 = 12;

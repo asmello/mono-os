@@ -23,23 +23,21 @@ fn main() -> ! {
     // human watching the console (tio /dev/cu.usbmodem*) can confirm the
     // sandbox plumbing on real hardware. Same suite that runs as
     // `cargo test --test m1_user` under QEMU, minus the semihosting exit.
-    let cases: &[(&str, fn() -> UserProgram)] = &[
-        ("exit_42", m1_demos::exit_42),
-        ("reads_cycles", m1_demos::reads_cycles),
-        ("touches_kernel", m1_demos::touches_kernel),
-        ("executes_data", m1_demos::executes_data),
-        ("infinite_loop", m1_demos::infinite_loop),
-    ];
-    for (name, program) in cases {
+    fn run_demo(name: &str, program: UserProgram) {
         let AbortResult {
             status,
             payload,
             cycles,
-        } = kernel::user::launch(&program());
+        } = kernel::user::launch(&program);
         kernel::println!(
             "demo {name:<16} status={status:?} payload={payload:#010x} cycles={cycles}"
         );
     }
+    run_demo("exit_42", m1_demos::exit_42());
+    run_demo("reads_cycles", m1_demos::reads_cycles());
+    run_demo("touches_kernel", m1_demos::touches_kernel());
+    run_demo("executes_data", m1_demos::executes_data());
+    run_demo("infinite_loop", m1_demos::infinite_loop());
     kernel::println!("M1 demos complete");
 
     let mut last_second = 0u32;

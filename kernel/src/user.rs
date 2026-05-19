@@ -203,7 +203,7 @@ pub fn launch(program: &UserProgram) -> AbortResult {
         .wrapping_add(program.entry_offset)
         | 1;
     let trampoline_entry = USER_TEXT_BASE | 1;
-    let ctx_ptr = SAVED_CTX.0.get() as *mut KernelCtx;
+    let ctx_ptr = SAVED_CTX.0.get();
     unsafe {
         launch_user_asm(user_entry, USER_STACK_TOP, ctx_ptr, trampoline_entry);
     }

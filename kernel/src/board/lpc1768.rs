@@ -49,10 +49,11 @@ const PLL0STAT_PLOCK: u32 = 1 << 26;
 const FLASHCFG_FLASHTIM_5CLK: u32 = 4 << 12;
 const FLASHCFG_FLASHTIM_MASK: u32 = 0xF << 12;
 
-// PLL0CFG (§4.5.11): M in bits 14:0, N in bits 23:16. Encoded as M-1 / N-1.
-const PLL0CFG_M12_N1: u32 = (12 - 1) | ((1 - 1) << 16);
-// CCLKCFG (§4.7.1): CCLK divider = field + 1.
-const CCLKCFG_DIV3: u32 = 3 - 1;
+// PLL0CFG (§4.5.11): M in bits 14:0, N in bits 23:16. Encoded as M-1 / N-1,
+// so M=12,N=1 maps to MSEL=11,NSEL=0.
+const PLL0CFG_M12_N1: u32 = 11;
+// CCLKCFG (§4.7.1): CCLK divider = field + 1, so /3 maps to field=2.
+const CCLKCFG_DIV3: u32 = 2;
 
 // PCLKSEL0 (§4.7.3): peripheral clock selectors. Each field is 2 bits;
 // 01 → CCLK/1. TIMER0 occupies bits 3:2, UART0 bits 7:6.
