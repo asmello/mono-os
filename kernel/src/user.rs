@@ -154,27 +154,30 @@ pub fn init() {
 ///
 /// `USER_TEXT_SIZE` minus the trampoline the kernel installs at the start
 /// of the user_text region.
-pub fn user_text_capacity() -> usize {
-    USER_TEXT_SIZE - trampoline_bytes().len()
-}
+pub const USER_TEXT_CAPACITY: usize = USER_TEXT_SIZE - TRAMPOLINE_LEN;
+
+/// Address inside user_text where the loaded program starts.
+///
+/// The trampoline occupies `[USER_TEXT_BASE, USER_TEXT_BASE+TRAMPOLINE_LEN)`;
+/// user code lives at this address onward.
+const USER_CODE_BASE: u32 = USER_TEXT_BASE + TRAMPOLINE_LEN as u32;
 
 /// Run `program` to termination and report what happened.
 ///
 /// Convenience over [`launch_loaded`] that handles the byte-copy itself;
 /// used by tests that already have a `&'static [u8]` source slice.
 pub fn launch(program: &UserProgram) -> AbortResult {
-    if program.text.len() > user_text_capacity() {
+    if program.text.len() > USER_TEXT_CAPACITY {
         return AbortResult {
             status: AbortStatus::LoadError,
             payload: program.text.len() as u32,
             cycles: 0,
         };
     }
-    let trampoline_len = trampoline_bytes().len();
     unsafe {
         ptr::copy_nonoverlapping(
             program.text.as_ptr(),
-            (USER_TEXT_BASE as *mut u8).add(trampoline_len),
+            USER_CODE_BASE as *mut u8,
             program.text.len(),
         );
         ptr::write_bytes(USER_DATA_BASE as *mut u8, 0, USER_DATA_SIZE);
@@ -210,8 +213,7 @@ pub struct LoadedProgram {
 /// The kernel installs the trampoline, zeroes the `.bss` window after
 /// `.data`, and dispatches.
 pub fn launch_loaded(program: LoadedProgram) -> AbortResult {
-    let trampoline = trampoline_bytes();
-    if (program.text_size as usize) > user_text_capacity()
+    if (program.text_size as usize) > USER_TEXT_CAPACITY
         || (program.data_size as usize) + (program.bss_size as usize) > USER_DATA_SIZE
     {
         return AbortResult {
@@ -222,9 +224,9 @@ pub fn launch_loaded(program: LoadedProgram) -> AbortResult {
     }
     unsafe {
         ptr::copy_nonoverlapping(
-            trampoline.as_ptr(),
+            TRAMPOLINE_BYTES.as_ptr(),
             USER_TEXT_BASE as *mut u8,
-            trampoline.len(),
+            TRAMPOLINE_LEN,
         );
         ptr::write_bytes(
             (USER_DATA_BASE as *mut u8).add(program.data_size as usize),
@@ -254,10 +256,7 @@ pub fn launch_loaded(program: LoadedProgram) -> AbortResult {
     // the privileged → unprivileged hand-off; doing it inline in kernel
     // flash fails because the post-ISB fetch lands in flash, which the
     // unprivileged-thread MPU view doesn't permit.
-    let user_entry = USER_TEXT_BASE
-        .wrapping_add(trampoline.len() as u32)
-        .wrapping_add(program.entry_offset)
-        | 1;
+    let user_entry = USER_CODE_BASE.wrapping_add(program.entry_offset) | 1;
     let trampoline_entry = USER_TEXT_BASE | 1;
     let ctx_ptr = SAVED_CTX.0.get();
     unsafe {
@@ -294,7 +293,7 @@ pub struct Loader {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LoaderError {
-    /// `text_size` exceeds [`user_text_capacity`].
+    /// `text_size` exceeds [`USER_TEXT_CAPACITY`].
     TextTooLarge,
     /// `data_size + bss_size` exceeds [`USER_DATA_SIZE`].
     DataTooLarge,
@@ -304,7 +303,7 @@ pub enum LoaderError {
 
 impl Loader {
     pub fn new(text_size: u32, data_size: u32, bss_size: u32) -> Result<Self, LoaderError> {
-        if text_size as usize > user_text_capacity() {
+        if text_size as usize > USER_TEXT_CAPACITY {
             return Err(LoaderError::TextTooLarge);
         }
         if (data_size as usize) + (bss_size as usize) > USER_DATA_SIZE {
@@ -329,11 +328,10 @@ impl Loader {
         if end > self.text_size + self.data_size {
             return Err(LoaderError::Overflow);
         }
-        let trampoline_len = trampoline_bytes().len() as u32;
         for (offset, &byte) in (self.written..).zip(chunk.iter()) {
             unsafe {
                 let dst = if offset < self.text_size {
-                    (USER_TEXT_BASE + trampoline_len + offset) as *mut u8
+                    (USER_CODE_BASE + offset) as *mut u8
                 } else {
                     (USER_DATA_BASE + (offset - self.text_size)) as *mut u8
                 };
@@ -401,6 +399,13 @@ static ABORT_END_LOW: AtomicU32 = AtomicU32::new(0);
 // subsequent BX fetch happens from user_text, which the unprivileged MPU
 // view permits, so it doesn't fault the way a drop-then-branch in kernel
 // flash would.
+//
+// `movs` and `bx` are 16-bit Thumb-1; `msr` and `isb` are 32-bit Thumb-2.
+// Total: 12 bytes. Editing the instructions means updating `TRAMPOLINE_LEN`
+// — the `.if` directive in the asm block traps any drift at assembly time
+// so a stale constant can't go unnoticed.
+
+const TRAMPOLINE_LEN: usize = 12;
 
 core::arch::global_asm!(
     r#"
@@ -408,29 +413,27 @@ core::arch::global_asm!(
     .syntax unified
     .thumb
     .align 1
-    .global __user_trampoline_start
-    .global __user_trampoline_end
-__user_trampoline_start:
+    .global __user_trampoline
+__user_trampoline:
         movs    r3, #3
         msr     control, r3
         isb
         bx      r0
-__user_trampoline_end:
-    "#
+        .if (. - __user_trampoline) != {LEN}
+        .error "trampoline length changed; update TRAMPOLINE_LEN in user.rs"
+        .endif
+    "#,
+    LEN = const TRAMPOLINE_LEN,
 );
 
 unsafe extern "C" {
-    static __user_trampoline_start: u8;
-    static __user_trampoline_end: u8;
+    static __user_trampoline: [u8; TRAMPOLINE_LEN];
 }
 
-fn trampoline_bytes() -> &'static [u8] {
-    unsafe {
-        let s = &__user_trampoline_start as *const u8;
-        let e = &__user_trampoline_end as *const u8;
-        core::slice::from_raw_parts(s, e.offset_from(s) as usize)
-    }
-}
+// SAFETY: `__user_trampoline` is a `TRAMPOLINE_LEN`-byte symbol emitted
+// by the `global_asm!` above; reading the bytes of executable code in
+// our own image is sound.
+const TRAMPOLINE_BYTES: &[u8] = unsafe { &__user_trampoline };
 
 // ---- naked entry / resume ---------------------------------------------------
 
