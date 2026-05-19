@@ -1,6 +1,6 @@
 //! `println!` / `print!` macros and the underlying `_print` shim.
 //!
-//! `_print` constructs a fresh [`Console`](crate::board::Console) handle for
+//! `_print` constructs a fresh [`UartTx`](crate::board::UartTx) handle for
 //! the active board on each call, wraps it in [`LineMode`] (so `\n` becomes
 //! `\r\n`), and writes the formatted args through it.
 
@@ -22,6 +22,6 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use fmt::Write;
-    let mut writer = LineMode(<Mcu as Board>::Uart::default());
+    let mut writer = LineMode(<Mcu as Board>::Tx::default());
     let _ = writer.write_fmt(args);
 }

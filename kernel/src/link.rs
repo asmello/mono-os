@@ -31,7 +31,7 @@
 //! }
 //! ```
 
-use crate::board::{Board, Console, Mcu, UartRx};
+use crate::board::{Board, Mcu, UartRx, UartTx};
 
 // ---- frame types -----------------------------------------------------------
 
@@ -358,7 +358,7 @@ impl Default for Parser {
 /// Send a complete frame over the console UART. Synchronous, blocking on
 /// each byte (the LPC1768 driver polls THRE).
 pub fn send(kind: u8, payload: &[u8]) {
-    let mut uart = <Mcu as Board>::Uart::default();
+    let mut uart = <Mcu as Board>::Tx::default();
     let len = payload.len() as u16;
     let mut crc = Crc32::new();
     crc.update(kind);

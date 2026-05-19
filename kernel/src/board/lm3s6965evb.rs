@@ -54,7 +54,7 @@ impl super::Board for Lm3s6965evb {
     /// a roughly visible tick rate.
     const CCLK_HZ: u32 = 12_000_000;
 
-    type Uart = Uart;
+    type Tx = Uart;
     type Rx = Uart0Rx;
     type Timeout = Gpt0;
 
@@ -66,7 +66,7 @@ impl super::Board for Lm3s6965evb {
 #[derive(Default)]
 pub struct Uart;
 
-impl super::Console for Uart {
+impl super::UartTx for Uart {
     fn write_byte(&mut self, byte: u8) {
         unsafe {
             while ptr::read_volatile(UARTFR) & UARTFR_TXFF != 0 {}

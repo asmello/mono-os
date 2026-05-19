@@ -11,8 +11,8 @@
 //! Mcu::Timeout::arm_in_cycles(96_000);      // calls `<Mcu as Board>::Timeout`
 //! ```
 //!
-//! Byte-level UART output goes through the [`Console`] trait, with the
-//! [`LineMode`] adapter wrapping any `Console` in `fmt::Write` and
+//! Byte-level UART output goes through the [`UartTx`] trait, with the
+//! [`LineMode`] adapter wrapping any `UartTx` in `fmt::Write` and
 //! translating `\n` to `\r\n` so terminal output is well-formed on real
 //! serial links.
 
@@ -24,9 +24,9 @@ pub trait Board {
     /// if `init` doesn't touch the clock tree).
     const CCLK_HZ: u32;
 
-    /// Byte-level handle to the board's console UART. A zero-sized type
-    /// wrapping memory-mapped registers.
-    type Uart: Console + Default;
+    /// Byte-level handle to the board's send side of the UART. A zero-sized
+    /// type wrapping memory-mapped registers.
+    type Tx: UartTx + Default;
 
     /// Interrupt-driven receive side of the same UART. The ISR pushes
     /// bytes into a ring buffer owned by the board module; consumers pop
@@ -45,7 +45,7 @@ pub trait Board {
     fn init();
 }
 
-pub trait Console {
+pub trait UartTx {
     fn write_byte(&mut self, byte: u8);
 }
 
@@ -78,11 +78,11 @@ pub trait TimeoutTimer {
     fn disarm();
 }
 
-/// `fmt::Write` adapter around any [`Console`]. Inserts a `\r` before every
+/// `fmt::Write` adapter around any [`UartTx`]. Inserts a `\r` before every
 /// `\n` so output renders correctly on raw serial terminals.
-pub struct LineMode<C: Console>(pub C);
+pub struct LineMode<C: UartTx>(pub C);
 
-impl<C: Console> fmt::Write for LineMode<C> {
+impl<C: UartTx> fmt::Write for LineMode<C> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for byte in s.bytes() {
             if byte == b'\n' {

@@ -184,7 +184,7 @@ impl super::Board for Lpc1768 {
     /// via PLL0 (M=12, N=1, /3). Crystal-stable, ~50 ppm.
     const CCLK_HZ: u32 = 96_000_000;
 
-    type Uart = Uart;
+    type Tx = UartTx;
     type Rx = Uart0Rx;
     type Timeout = Timer0;
 
@@ -195,9 +195,9 @@ impl super::Board for Lpc1768 {
 }
 
 #[derive(Default)]
-pub struct Uart;
+pub struct UartTx;
 
-impl super::Console for Uart {
+impl super::UartTx for UartTx {
     fn write_byte(&mut self, byte: u8) {
         unsafe {
             while ptr::read_volatile(UART0_LSR) & LSR_THRE == 0 {}
