@@ -24,7 +24,7 @@
 use crate::board::{Board, Mcu, UartRx, UartTx};
 
 pub use monolink_proto::{
-    BadReason, CHUNK_MAX, Crc32, ExecHeader, Frame, Parser, Poll, ResultFrame, SOF,
+    BadReason, CHUNK_MAX, Crc32, ExecHeader, Frame, NakReason, Parser, Poll, ResultFrame, SOF,
     STATUS_BUSFAULT, STATUS_LOAD_ERROR, STATUS_MEMFAULT, STATUS_OK, STATUS_TIMEOUT,
     STATUS_USAGEFAULT, TYPE_ACK, TYPE_CHUNK, TYPE_EOF, TYPE_NAK, TYPE_RESULT, TYPE_START_LOAD,
 };
@@ -68,8 +68,13 @@ pub fn send_ack() {
     send(TYPE_ACK, &[]);
 }
 
-pub fn send_nak() {
-    send(TYPE_NAK, &[]);
+/// Send a NAK with a one-byte reason payload.
+///
+/// The kernel deliberately doesn't print human-readable text mid-session
+/// — it would interleave with framed bytes on the wire. The host tool
+/// renders [`NakReason`] into the user-facing message.
+pub fn send_nak(reason: NakReason) {
+    send(TYPE_NAK, &[reason as u8]);
 }
 
 #[cfg(test)]

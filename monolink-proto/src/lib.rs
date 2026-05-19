@@ -34,6 +34,85 @@ pub const SOF: u8 = 0x55;
 /// (see [`Parser::PAYLOAD_MAX`]) so a START_LOAD-sized header also fits.
 pub const CHUNK_MAX: usize = 256;
 
+// ---- NAK reasons -----------------------------------------------------------
+
+/// One-byte payload of a [`TYPE_NAK`] frame.
+///
+/// The kernel uses these to report exactly why a session was rejected so
+/// the host tool can print a useful message without the kernel ever
+/// emitting raw text on the wire mid-session (which would interleave with
+/// framed bytes and break stricter clients).
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum NakReason {
+    Unspecified = 0,
+    /// Parser saw a payload length larger than [`Parser::PAYLOAD_MAX`].
+    FramingOversized = 1,
+    /// Frame arrived with a CRC32 that didn't match its body.
+    FramingCrcMismatch = 2,
+    /// Frame's TYPE byte isn't one the kernel knows.
+    UnknownType = 3,
+    /// `CHUNK` arrived with no preceding `START_LOAD`.
+    ChunkBeforeStart = 4,
+    /// `EOF` arrived with no preceding `START_LOAD`.
+    EofBeforeStart = 5,
+    /// `EOF` arrived before all declared bytes had been streamed.
+    EofShort = 6,
+    /// `START_LOAD` payload wasn't [`ExecHeader::SIZE`] bytes.
+    BadHeaderSize = 7,
+    /// Header magic or version didn't match the kernel's expectation.
+    BadMagicOrVersion = 8,
+    /// `text_size` exceeds the user-text region's capacity.
+    LoaderTextTooLarge = 9,
+    /// `data_size + bss_size` exceeds the user-data region's size.
+    LoaderDataTooLarge = 10,
+    /// A chunk wrote past the declared `text_size + data_size`.
+    LoaderOverflow = 11,
+}
+
+impl NakReason {
+    /// Decode a wire byte. Unknown values map to [`NakReason::Unspecified`].
+    pub const fn from_byte(byte: u8) -> Self {
+        match byte {
+            1 => Self::FramingOversized,
+            2 => Self::FramingCrcMismatch,
+            3 => Self::UnknownType,
+            4 => Self::ChunkBeforeStart,
+            5 => Self::EofBeforeStart,
+            6 => Self::EofShort,
+            7 => Self::BadHeaderSize,
+            8 => Self::BadMagicOrVersion,
+            9 => Self::LoaderTextTooLarge,
+            10 => Self::LoaderDataTooLarge,
+            11 => Self::LoaderOverflow,
+            _ => Self::Unspecified,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unspecified => "unspecified",
+            Self::FramingOversized => "oversized frame",
+            Self::FramingCrcMismatch => "frame CRC mismatch",
+            Self::UnknownType => "unknown frame type",
+            Self::ChunkBeforeStart => "chunk before start_load",
+            Self::EofBeforeStart => "eof before start_load",
+            Self::EofShort => "eof before all bytes streamed",
+            Self::BadHeaderSize => "start_load payload wasn't header-sized",
+            Self::BadMagicOrVersion => "bad exec-header magic or version",
+            Self::LoaderTextTooLarge => "text_size exceeds user-text capacity",
+            Self::LoaderDataTooLarge => "data_size + bss_size exceeds user-data size",
+            Self::LoaderOverflow => "chunk wrote past declared body length",
+        }
+    }
+}
+
+impl core::fmt::Display for NakReason {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 // ---- ExecHeader ------------------------------------------------------------
 
 /// 32-byte header carried by [`TYPE_START_LOAD`] frames.

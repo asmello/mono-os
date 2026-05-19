@@ -11,15 +11,20 @@ use cortex_m_rt::entry;
 fn main() -> ! {
     use kernel::board::{Board, Mcu};
     use kernel::link::{
-        self, ExecHeader, Frame, Parser, Poll, ResultFrame, TYPE_CHUNK, TYPE_EOF, TYPE_START_LOAD,
+        self, BadReason, ExecHeader, Frame, NakReason, Parser, Poll, ResultFrame, TYPE_CHUNK,
+        TYPE_EOF, TYPE_START_LOAD,
     };
-    use kernel::user::{self, AbortResult, AbortStatus, LoadedProgram, Loader};
+    use kernel::user::{self, AbortResult, AbortStatus, LoadedProgram, Loader, LoaderError};
 
     kernel::init();
     let p = cortex_m::Peripherals::take().expect("only taken once");
     kernel::clock::init(p.DCB, p.DWT);
     kernel::time::init(p.SYST);
     kernel::timeout::init();
+    // One-shot boot greeting. The host tool's parser resyncs on SOF, so
+    // any non-frame bytes that arrive before a session starts are
+    // swallowed harmlessly. Once a session is in progress, the kernel
+    // emits nothing but framed bytes.
     kernel::println!("monolink ready");
 
     let cclk_hz = <Mcu as Board>::CCLK_HZ;
@@ -34,13 +39,31 @@ fn main() -> ! {
                 cortex_m::asm::wfi();
             }
             Poll::Bad(reason) => {
-                kernel::println!("link nak: {reason:?}");
-                link::send_nak();
+                link::send_nak(framing_reason(reason));
                 session = None;
             }
             Poll::Frame(frame) => {
                 session = handle_frame(frame, session, cycles_per_ms, cclk_hz);
             }
+        }
+    }
+
+    fn framing_reason(reason: BadReason) -> NakReason {
+        match reason {
+            BadReason::Oversized => NakReason::FramingOversized,
+            BadReason::CrcMismatch => NakReason::FramingCrcMismatch,
+            // `BadSof` is swallowed inside `Parser` between frames and only
+            // surfaces when no frame is in progress, so we fall into the
+            // generic Unspecified bucket rather than a dedicated reason.
+            BadReason::BadSof => NakReason::Unspecified,
+        }
+    }
+
+    fn loader_reason(err: LoaderError) -> NakReason {
+        match err {
+            LoaderError::TextTooLarge => NakReason::LoaderTextTooLarge,
+            LoaderError::DataTooLarge => NakReason::LoaderDataTooLarge,
+            LoaderError::Overflow => NakReason::LoaderOverflow,
         }
     }
 
@@ -57,30 +80,20 @@ fn main() -> ! {
                 finish_load(session, cycles_per_ms, cclk_hz);
                 None
             }
-            other => {
-                kernel::println!("link nak: unknown type {other:#04x}");
-                link::send_nak();
+            _ => {
+                link::send_nak(NakReason::UnknownType);
                 session
             }
         }
     }
 
     fn start_load(payload: &[u8]) -> Option<(Loader, ExecHeader)> {
-        let header = match ExecHeader::parse(payload) {
-            Some(h) => h,
-            None => {
-                kernel::println!("link nak: header size {}", payload.len());
-                link::send_nak();
-                return None;
-            }
+        let Some(header) = ExecHeader::parse(payload) else {
+            link::send_nak(NakReason::BadHeaderSize);
+            return None;
         };
         if header.magic != ExecHeader::MAGIC || header.version != ExecHeader::VERSION {
-            kernel::println!(
-                "link nak: bad magic/version (magic={:?} version={})",
-                header.magic,
-                header.version
-            );
-            link::send_nak();
+            link::send_nak(NakReason::BadMagicOrVersion);
             return None;
         }
         match Loader::new(header.text_size, header.data_size, header.bss_size) {
@@ -89,8 +102,7 @@ fn main() -> ! {
                 Some((loader, header))
             }
             Err(e) => {
-                kernel::println!("link nak: loader rejected sizes: {e:?}");
-                link::send_nak();
+                link::send_nak(loader_reason(e));
                 None
             }
         }
@@ -100,13 +112,9 @@ fn main() -> ! {
         payload: &[u8],
         session: Option<(Loader, ExecHeader)>,
     ) -> Option<(Loader, ExecHeader)> {
-        let (mut loader, header) = match session {
-            Some(s) => s,
-            None => {
-                kernel::println!("link nak: chunk without start_load");
-                link::send_nak();
-                return None;
-            }
+        let Some((mut loader, header)) = session else {
+            link::send_nak(NakReason::ChunkBeforeStart);
+            return None;
         };
         match loader.append(payload) {
             Ok(_) => {
@@ -114,29 +122,19 @@ fn main() -> ! {
                 Some((loader, header))
             }
             Err(e) => {
-                kernel::println!("link nak: chunk append failed: {e:?}");
-                link::send_nak();
+                link::send_nak(loader_reason(e));
                 None
             }
         }
     }
 
     fn finish_load(session: Option<(Loader, ExecHeader)>, cycles_per_ms: u32, cclk_hz: u32) {
-        let (loader, header) = match session {
-            Some(s) => s,
-            None => {
-                kernel::println!("link nak: eof without start_load");
-                link::send_nak();
-                return;
-            }
+        let Some((loader, header)) = session else {
+            link::send_nak(NakReason::EofBeforeStart);
+            return;
         };
         if loader.written() != loader.expected_total() {
-            kernel::println!(
-                "link nak: eof at {}/{} bytes",
-                loader.written(),
-                loader.expected_total()
-            );
-            link::send_nak();
+            link::send_nak(NakReason::EofShort);
             return;
         }
         link::send_ack();
@@ -170,7 +168,6 @@ fn main() -> ! {
         }
         .write_le(&mut frame_bytes);
         link::send(link::TYPE_RESULT, &frame_bytes);
-        kernel::println!("ran: status={status:?} exit={payload:#010x} cycles={cycles}");
     }
 }
 

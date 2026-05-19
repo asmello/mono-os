@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser as ClapParser, Subcommand};
 use monolink_proto::{
-    BadReason, CHUNK_MAX, Crc32, ExecHeader, Parser, Poll as ProtoPoll, ResultFrame, SOF,
-    STATUS_BUSFAULT, STATUS_LOAD_ERROR, STATUS_MEMFAULT, STATUS_OK, STATUS_TIMEOUT,
+    BadReason, CHUNK_MAX, Crc32, ExecHeader, NakReason, Parser, Poll as ProtoPoll, ResultFrame,
+    SOF, STATUS_BUSFAULT, STATUS_LOAD_ERROR, STATUS_MEMFAULT, STATUS_OK, STATUS_TIMEOUT,
     STATUS_USAGEFAULT, TYPE_ACK, TYPE_CHUNK, TYPE_EOF, TYPE_NAK, TYPE_RESULT, TYPE_START_LOAD,
 };
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
@@ -174,7 +174,14 @@ fn expect_ack(file: &mut File, what: &str) -> Result<()> {
         .with_context(|| format!("waiting for ACK of {what}"))?;
     match kind {
         TYPE_ACK => Ok(()),
-        TYPE_NAK => Err(anyhow!("device NAK'd {what}")),
+        TYPE_NAK => {
+            let reason = payload
+                .first()
+                .copied()
+                .map(NakReason::from_byte)
+                .unwrap_or(NakReason::Unspecified);
+            Err(anyhow!("device NAK'd {what}: {reason}"))
+        }
         other => Err(anyhow!(
             "expected ACK for {what}, got type {other:#04x} payload={payload:02x?}"
         )),
