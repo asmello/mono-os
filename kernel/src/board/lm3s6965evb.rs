@@ -13,7 +13,14 @@ use lm3s6965::interrupt;
 const UART0_BASE: usize = 0x4000_C000;
 const UARTDR: *mut u32 = UART0_BASE as *mut u32;
 const UARTFR: *const u32 = (UART0_BASE + 0x018) as *const u32;
+const UARTIM: *mut u32 = (UART0_BASE + 0x038) as *mut u32;
+const UARTMIS: *const u32 = (UART0_BASE + 0x040) as *const u32;
+const UARTICR: *mut u32 = (UART0_BASE + 0x044) as *mut u32;
 const UARTFR_TXFF: u32 = 1 << 5;
+const UARTFR_RXFE: u32 = 1 << 4;
+const UART_IM_RXIM: u32 = 1 << 4; // RX FIFO trigger interrupt enable
+const UART_IM_RTIM: u32 = 1 << 6; // RX timeout interrupt enable
+const IRQ_UART0: u32 = 5;
 
 // System control (LM3S6965 §5.4).
 const SYSCTL_RCGC1: *mut u32 = 0x400F_E104 as *mut u32;
@@ -48,6 +55,7 @@ impl super::Board for Lm3s6965evb {
     const CCLK_HZ: u32 = 12_000_000;
 
     type Uart = Uart;
+    type Rx = Uart0Rx;
     type Timeout = Gpt0;
 
     fn init() {
@@ -125,4 +133,80 @@ fn TIMER_0A() {
         ptr::write_volatile(GPTMICR, GPTM_TATOIM);
     }
     crate::user::on_timeout_match();
+}
+
+/// UART0 receive side. QEMU's emulated PL011 raises the RX interrupt as
+/// bytes arrive on the `-serial` backend. The ISR drains UARTDR into a
+/// 512-byte ring; [`read_byte`] pops one non-blockingly.
+pub struct Uart0Rx;
+
+impl super::UartRx for Uart0Rx {
+    fn init() {
+        unsafe {
+            // Enable RX FIFO trigger + RX timeout interrupts.
+            ptr::write_volatile(UARTICR, UART_IM_RXIM | UART_IM_RTIM);
+            ptr::write_volatile(UARTIM, UART_IM_RXIM | UART_IM_RTIM);
+            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_UART0);
+            ptr::write_volatile(NVIC_ISER0, 1 << IRQ_UART0);
+        }
+    }
+
+    fn read_byte() -> Option<u8> {
+        rx_ring::pop()
+    }
+}
+
+#[interrupt]
+fn UART0() {
+    unsafe {
+        // Ack any pending RX-source bits, then drain while FIFO non-empty.
+        ptr::write_volatile(UARTICR, UART_IM_RXIM | UART_IM_RTIM);
+        while ptr::read_volatile(UARTFR) & UARTFR_RXFE == 0 {
+            let byte = ptr::read_volatile(UARTDR) as u8;
+            rx_ring::push(byte);
+        }
+        // Re-ack so we don't take a spurious re-entry on stale MIS.
+        let _ = ptr::read_volatile(UARTMIS);
+        ptr::write_volatile(UARTICR, UART_IM_RXIM | UART_IM_RTIM);
+    }
+}
+
+mod rx_ring {
+    //! SPSC byte ring: producer = UART0 ISR, consumer = main thread.
+    //! Identical shape to the LPC1768 ring; see that file for notes.
+
+    use core::cell::UnsafeCell;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    const SIZE: usize = 512;
+    const MASK: usize = SIZE - 1;
+
+    struct Buf(UnsafeCell<[u8; SIZE]>);
+    unsafe impl Sync for Buf {}
+
+    static BUF: Buf = Buf(UnsafeCell::new([0; SIZE]));
+    static HEAD: AtomicUsize = AtomicUsize::new(0);
+    static TAIL: AtomicUsize = AtomicUsize::new(0);
+
+    pub fn push(byte: u8) {
+        let head = HEAD.load(Ordering::Relaxed);
+        let tail = TAIL.load(Ordering::Acquire);
+        let next = (head + 1) & MASK;
+        if next == tail {
+            return;
+        }
+        unsafe { (*BUF.0.get())[head] = byte };
+        HEAD.store(next, Ordering::Release);
+    }
+
+    pub fn pop() -> Option<u8> {
+        let tail = TAIL.load(Ordering::Relaxed);
+        let head = HEAD.load(Ordering::Acquire);
+        if head == tail {
+            return None;
+        }
+        let byte = unsafe { (*BUF.0.get())[tail] };
+        TAIL.store((tail + 1) & MASK, Ordering::Release);
+        Some(byte)
+    }
 }

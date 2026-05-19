@@ -28,6 +28,11 @@ pub trait Board {
     /// wrapping memory-mapped registers.
     type Uart: Console + Default;
 
+    /// Interrupt-driven receive side of the same UART. The ISR pushes
+    /// bytes into a ring buffer owned by the board module; consumers pop
+    /// them with [`UartRx::read_byte`].
+    type Rx: UartRx;
+
     /// One-shot deadline source. The kernel arms it before launching a user
     /// program and listens for its interrupt to enforce a timeout. The
     /// interrupt handler itself lives in the board module because its name
@@ -42,6 +47,18 @@ pub trait Board {
 
 pub trait Console {
     fn write_byte(&mut self, byte: u8);
+}
+
+/// Interrupt-driven UART receive. Each board's impl powers a small ring
+/// buffer that the RX interrupt handler fills; [`read_byte`] is a
+/// non-blocking pop for the consumer (the monolink frame parser).
+pub trait UartRx {
+    /// Enable the UART's receive interrupt and arm the NVIC line. The
+    /// baud rate and pin mux are already set by [`Board::init`].
+    fn init();
+
+    /// Non-blocking pop. Returns `None` if the ring is empty.
+    fn read_byte() -> Option<u8>;
 }
 
 /// Hardware timer programmable as a one-shot match interrupt expressed in

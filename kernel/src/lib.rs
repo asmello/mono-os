@@ -10,11 +10,15 @@ pub mod time;
 pub mod timeout;
 pub mod user;
 
-/// One-time board setup. Brings up the UART so `println!` works and arms
-/// the individually-vectored MemManage / BusFault / UsageFault handlers
-/// that [`user`] relies on.
+/// One-time board setup. Brings up the UART (TX + interrupt-driven RX),
+/// so `println!` works and bytes coming in over the wire are buffered
+/// into the ring for [`Mcu::Rx::read_byte`]. Also arms the individually
+/// vectored MemManage / BusFault / UsageFault handlers that [`user`]
+/// relies on.
 pub fn init() {
-    <board::Mcu as board::Board>::init();
+    use board::{Board, UartRx};
+    <board::Mcu as Board>::init();
+    <<board::Mcu as Board>::Rx as UartRx>::init();
     user::init();
 }
 

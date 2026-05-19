@@ -1,7 +1,7 @@
 //! Board driver for the mbed NXP LPC1768 (Cortex-M3).
 //!
 //! `init()` brings CCLK from the 4 MHz IRC up to 96 MHz off the mbed's 12 MHz
-//! crystal via PLL0, then configures UART0 for 9600 8N1 against the new
+//! crystal via PLL0, then configures UART0 for 115200 8N1 against the new
 //! clock. Register names and sequence numbers refer to UM10360 (LPC176x/5x
 //! user manual).
 //!
@@ -9,8 +9,9 @@
 //!   M = 12, N = 1 → Fcco = 2·M·Fin/N = 288 MHz (within the 275–550 MHz band).
 //!   CCLK divider = 3 → CCLK = 96 MHz. Crystal-stable, ~50 ppm.
 //!
-//! UART0 baud at 96 MHz PCLK: 96e6 / (16 · 625) = 9600, exact. The 625
-//! divisor splits to DLM = 2, DLL = 113.
+//! UART0 baud at 96 MHz PCLK: 96e6 / (16 · 52) ≈ 115_384, ~0.16% above 115200
+//! — well within standard async tolerance. The 52 divisor splits to DLM = 0,
+//! DLL = 52.
 //!
 //! UART0 is wired to P0.2/P0.3, which the mbed interface MCU bridges to the
 //! host's USB CDC ACM port (the `/dev/cu.usbmodem*` device).
@@ -83,10 +84,12 @@ const IRQ_TIMER0: u32 = 1;
 
 // UART0 (UM10360 ch. 14, base 0x4000_C000).
 const UART0_BASE: usize = 0x4000_C000;
+const UART0_RBR: *const u32 = UART0_BASE as *const u32;
 const UART0_THR: *mut u32 = UART0_BASE as *mut u32;
 const UART0_DLL: *mut u32 = UART0_BASE as *mut u32;
 const UART0_IER: *mut u32 = (UART0_BASE + 0x04) as *mut u32;
 const UART0_DLM: *mut u32 = (UART0_BASE + 0x04) as *mut u32;
+const UART0_IIR: *const u32 = (UART0_BASE + 0x08) as *const u32;
 const UART0_FCR: *mut u32 = (UART0_BASE + 0x08) as *mut u32;
 const UART0_LCR: *mut u32 = (UART0_BASE + 0x0C) as *mut u32;
 const UART0_LSR: *const u32 = (UART0_BASE + 0x14) as *const u32;
@@ -99,8 +102,15 @@ const LCR_DLAB: u32 = 1 << 7;
 const LCR_8N1: u32 = 0b11;
 const FCR_FIFO_ENABLE_AND_RESET: u32 = 0x07;
 const LSR_THRE: u32 = 1 << 5;
-const BAUD_DLM_9600_AT_96MHZ: u32 = 2;
-const BAUD_DLL_9600_AT_96MHZ: u32 = 113;
+const LSR_RDR: u32 = 1 << 0;
+const IER_RBR: u32 = 1 << 0; // RX data available interrupt.
+const IIR_INTID_MASK: u32 = 0b1110;
+const IIR_INTID_RDA: u32 = 0b0100; // Receive Data Available.
+const IIR_INTID_CTI: u32 = 0b1100; // Character Time-out Indicator.
+const BAUD_DLM_115200_AT_96MHZ: u32 = 0;
+const BAUD_DLL_115200_AT_96MHZ: u32 = 52;
+
+const IRQ_UART0: u32 = 5;
 
 unsafe fn feed_pll0() {
     unsafe {
@@ -143,7 +153,7 @@ fn setup_clock_96mhz() {
     }
 }
 
-fn setup_uart0_9600() {
+fn setup_uart0_115200() {
     unsafe {
         ptr::write_volatile(PCONP, ptr::read_volatile(PCONP) | PCONP_PCUART0);
 
@@ -157,10 +167,10 @@ fn setup_uart0_9600() {
         pinsel = (pinsel & !PINSEL0_P0_2_P0_3_MASK) | PINSEL0_P0_2_TXD0 | PINSEL0_P0_3_RXD0;
         ptr::write_volatile(PINSEL0, pinsel);
 
-        // 9600 8N1.
+        // 115200 8N1.
         ptr::write_volatile(UART0_LCR, LCR_DLAB);
-        ptr::write_volatile(UART0_DLL, BAUD_DLL_9600_AT_96MHZ);
-        ptr::write_volatile(UART0_DLM, BAUD_DLM_9600_AT_96MHZ);
+        ptr::write_volatile(UART0_DLL, BAUD_DLL_115200_AT_96MHZ);
+        ptr::write_volatile(UART0_DLM, BAUD_DLM_115200_AT_96MHZ);
         ptr::write_volatile(UART0_LCR, LCR_8N1);
         ptr::write_volatile(UART0_FCR, FCR_FIFO_ENABLE_AND_RESET);
         ptr::write_volatile(UART0_IER, 0);
@@ -175,11 +185,12 @@ impl super::Board for Lpc1768 {
     const CCLK_HZ: u32 = 96_000_000;
 
     type Uart = Uart;
+    type Rx = Uart0Rx;
     type Timeout = Timer0;
 
     fn init() {
         setup_clock_96mhz();
-        setup_uart0_9600();
+        setup_uart0_115200();
     }
 }
 
@@ -257,4 +268,90 @@ fn TIMER0() {
         ptr::write_volatile(T0_IR, IR_MR0);
     }
     crate::user::on_timeout_match();
+}
+
+/// UART0 receive side. The ISR drains the RX FIFO into a 512-byte ring
+/// (SPSC: ISR producer, main-thread consumer); [`read_byte`] pops one
+/// without blocking. Overruns drop bytes — the host retransmits on CRC
+/// failure.
+pub struct Uart0Rx;
+
+impl super::UartRx for Uart0Rx {
+    fn init() {
+        unsafe {
+            // Enable the Receive Data Available + Character Time-out
+            // interrupt source. (RDA fires once the FIFO trigger level
+            // is met; CTI fires for stragglers when the line goes idle.)
+            ptr::write_volatile(UART0_IER, IER_RBR);
+            // NVIC: clear any stale pending and enable IRQ 5.
+            ptr::write_volatile(NVIC_ICPR0, 1 << IRQ_UART0);
+            ptr::write_volatile(NVIC_ISER0, 1 << IRQ_UART0);
+        }
+    }
+
+    fn read_byte() -> Option<u8> {
+        rx_ring::pop()
+    }
+}
+
+#[interrupt]
+fn UART0() {
+    unsafe {
+        // IIR.INTID identifies the source; drain the FIFO while LSR.RDR
+        // is set. We service both RDA and CTI here.
+        loop {
+            let iir = ptr::read_volatile(UART0_IIR);
+            let intid = iir & IIR_INTID_MASK;
+            if intid != IIR_INTID_RDA && intid != IIR_INTID_CTI {
+                break;
+            }
+            while ptr::read_volatile(UART0_LSR) & LSR_RDR != 0 {
+                let byte = ptr::read_volatile(UART0_RBR) as u8;
+                rx_ring::push(byte);
+            }
+        }
+    }
+}
+
+mod rx_ring {
+    //! SPSC byte ring: producer = UART0 ISR, consumer = main thread.
+    //!
+    //! Single-core, no SMP — Acquire/Release on the two indices is enough
+    //! to keep the ISR and the consumer from seeing each other's writes
+    //! out of order. Size is a power of two so wrapping is a mask.
+
+    use core::cell::UnsafeCell;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    const SIZE: usize = 512;
+    const MASK: usize = SIZE - 1;
+
+    struct Buf(UnsafeCell<[u8; SIZE]>);
+    unsafe impl Sync for Buf {}
+
+    static BUF: Buf = Buf(UnsafeCell::new([0; SIZE]));
+    static HEAD: AtomicUsize = AtomicUsize::new(0); // written by ISR
+    static TAIL: AtomicUsize = AtomicUsize::new(0); // written by consumer
+
+    pub fn push(byte: u8) {
+        let head = HEAD.load(Ordering::Relaxed);
+        let tail = TAIL.load(Ordering::Acquire);
+        let next = (head + 1) & MASK;
+        if next == tail {
+            return; // ring full; drop byte
+        }
+        unsafe { (*BUF.0.get())[head] = byte };
+        HEAD.store(next, Ordering::Release);
+    }
+
+    pub fn pop() -> Option<u8> {
+        let tail = TAIL.load(Ordering::Relaxed);
+        let head = HEAD.load(Ordering::Acquire);
+        if head == tail {
+            return None;
+        }
+        let byte = unsafe { (*BUF.0.get())[tail] };
+        TAIL.store((tail + 1) & MASK, Ordering::Release);
+        Some(byte)
+    }
 }
