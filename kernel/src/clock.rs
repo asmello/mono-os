@@ -1,8 +1,8 @@
-//! High-resolution cycle counter via the ARMv7-M Data Watchpoint and Trace
-//! unit. `DWT.CYCCNT` increments once per CPU cycle, so at the active
-//! `CCLK_HZ` it gives the finest timestamp available without a dedicated
-//! timer peripheral — the measurement source the runtime reports back to
-//! the host.
+//! High-resolution cycle counter via the ARMv7-M Data Watchpoint and Trace unit.
+//!
+//! `DWT.CYCCNT` increments once per CPU cycle, so at the active `CCLK_HZ` it
+//! gives the finest timestamp available without a dedicated timer peripheral
+//! — the measurement source the runtime reports back to the host.
 //!
 //! The raw counter is 32 bits and wraps after `2^32 / CCLK_HZ` seconds (~44 s
 //! at 96 MHz). [`cycles_now_u64`] extends it in software: SysTick samples the
@@ -28,6 +28,7 @@ pub fn cycles_now() -> u32 {
 }
 
 /// Sample the low word and detect rollover since the previous sample.
+///
 /// Called from the SysTick handler. Idempotent if the counter hasn't moved.
 pub fn poll_extension() {
     let low = DWT::cycle_count();
@@ -37,9 +38,11 @@ pub fn poll_extension() {
     }
 }
 
-/// Read the software-extended 64-bit cycle count. Tolerates being preempted
-/// by [`poll_extension`] between the high-word reads: if the high word
-/// changed mid-read, re-snapshot the low word against the post-wrap high.
+/// Read the software-extended 64-bit cycle count.
+///
+/// Tolerates being preempted by [`poll_extension`] between the high-word
+/// reads: if the high word changed mid-read, re-snapshot the low word
+/// against the post-wrap high.
 pub fn cycles_now_u64() -> u64 {
     let h0 = HIGH.load(Ordering::Relaxed);
     let l = DWT::cycle_count();

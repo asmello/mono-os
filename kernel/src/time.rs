@@ -38,9 +38,10 @@ pub fn ticks() -> u32 {
     TICKS.load(Ordering::Relaxed)
 }
 
-/// Disable the SysTick counter+interrupt for the duration of a user-program
-/// run. Returns the prior enable state so a matching [`resume`] only fires
-/// when the kernel had actually enabled SysTick to begin with.
+/// Disable the SysTick counter+interrupt for the duration of a user-program run.
+///
+/// Returns the prior enable state so a matching [`resume`] only fires when
+/// the kernel had actually enabled SysTick to begin with.
 pub fn pause() -> bool {
     unsafe {
         let csr = ptr::read_volatile(SYST_CSR);

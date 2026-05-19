@@ -1,5 +1,7 @@
-//! M1 sandbox tests: run five hand-assembled user programs through
-//! [`kernel::user::launch`] and assert the abort status the kernel reports.
+//! M1 sandbox tests.
+//!
+//! Run five hand-assembled user programs through [`kernel::user::launch`]
+//! and assert the abort status the kernel reports.
 //!
 //! The program bodies live in the [`demos`] module below — they're only
 //! needed by this test, not the kernel proper.

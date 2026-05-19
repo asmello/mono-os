@@ -1,5 +1,6 @@
-//! `monolink v0`: a stop-and-wait UART framing layer for shipping a single
-//! user-program image from the host to the device.
+//! `monolink v0`: stop-and-wait UART framing for one user-program image.
+//!
+//! Ships a single binary from the host to the device, one frame at a time.
 //!
 //! Wire format (little-endian throughout):
 //!
@@ -46,8 +47,9 @@ const SOF: u8 = 0x55;
 
 // ---- ExecHeader ------------------------------------------------------------
 
-/// 32-byte header carried by [`TYPE_START_LOAD`] frames. Pinned layout —
-/// any field renaming or reorder is a wire-breaking change.
+/// 32-byte header carried by [`TYPE_START_LOAD`] frames.
+///
+/// Pinned layout — any field renaming or reorder is a wire-breaking change.
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ExecHeader {
@@ -67,8 +69,10 @@ impl ExecHeader {
     pub const MAGIC: [u8; 4] = *b"MOXE";
     pub const VERSION: u16 = 0;
 
-    /// Decode from a 32-byte little-endian slice. Returns `None` only on a
-    /// size mismatch; field-value validation is the caller's problem.
+    /// Decode from a 32-byte little-endian slice.
+    ///
+    /// Returns `None` only on a size mismatch; field-value validation is
+    /// the caller's problem.
     pub fn parse(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != Self::SIZE {
             return None;
@@ -98,8 +102,9 @@ pub const STATUS_BUSFAULT: u8 = 3;
 pub const STATUS_USAGEFAULT: u8 = 4;
 pub const STATUS_LOAD_ERROR: u8 = 5;
 
-/// 20-byte payload of a [`TYPE_RESULT`] frame. Same pin-layout rules as
-/// [`ExecHeader`].
+/// 20-byte payload of a [`TYPE_RESULT`] frame.
+///
+/// Same pin-layout rules as [`ExecHeader`].
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ResultFrame {
@@ -124,9 +129,11 @@ impl ResultFrame {
 
 // ---- CRC32 -----------------------------------------------------------------
 
-/// IEEE 802.3 / zlib CRC32. Initialized with `0xFFFFFFFF` and XORed with the
-/// same constant on finalization — matches what most host-side tooling does
-/// by default (`zlib.crc32`, `crc32` in PySerial scripts, etc).
+/// IEEE 802.3 / zlib CRC32.
+///
+/// Initialized with `0xFFFFFFFF` and XORed with the same constant on
+/// finalization — matches what most host-side tooling does by default
+/// (`zlib.crc32`, `crc32` in PySerial scripts, etc).
 pub struct Crc32(u32);
 
 impl Crc32 {
@@ -184,11 +191,15 @@ const CRC32_TABLE: [u32; 256] = {
 pub enum Poll<'a> {
     /// Ring is empty; no new frame this round.
     Pending,
-    /// A complete frame arrived. The slice borrows from the parser's
-    /// internal buffer and is valid until the next `poll`.
+    /// A complete frame arrived.
+    ///
+    /// The slice borrows from the parser's internal buffer and is valid
+    /// until the next `poll`.
     Frame(Frame<'a>),
-    /// A byte was consumed but the frame was malformed (bad SOF, oversized
-    /// payload, CRC mismatch). Caller may NAK and keep polling.
+    /// A byte was consumed but the frame was malformed.
+    ///
+    /// Bad SOF, oversized payload, or CRC mismatch. Caller may NAK and
+    /// keep polling.
     Bad(BadReason),
 }
 
@@ -229,8 +240,10 @@ pub struct Parser {
 }
 
 impl Parser {
-    /// Largest payload we accept. Sized for `CHUNK` (256-byte body) with a
-    /// little headroom. Anything bigger trips [`BadReason::Oversized`].
+    /// Largest payload we accept.
+    ///
+    /// Sized for `CHUNK` (256-byte body) with a little headroom. Anything
+    /// bigger trips [`BadReason::Oversized`].
     pub const PAYLOAD_MAX: usize = 320;
 
     pub const fn new() -> Self {
@@ -253,8 +266,9 @@ impl Parser {
         self.crc_idx = 0;
     }
 
-    /// Consume one byte from the per-board RX ring (if any) and step the
-    /// state machine. Returns the new parser state.
+    /// Consume one byte from the per-board RX ring (if any) and step the state machine.
+    ///
+    /// Returns the new parser state.
     pub fn poll(&mut self) -> Poll<'_> {
         let byte = match <<Mcu as Board>::Rx as UartRx>::read_byte() {
             Some(b) => b,
@@ -263,7 +277,8 @@ impl Parser {
         self.step(byte)
     }
 
-    /// Pure-function step. Drives the state machine forward by one byte.
+    /// Pure-function step: drive the state machine forward by one byte.
+    ///
     /// Exposed so tests can feed bytes directly without going through the
     /// UART ring; the production path is [`Self::poll`].
     pub fn step(&mut self, byte: u8) -> Poll<'_> {
@@ -355,8 +370,9 @@ impl Default for Parser {
 
 // ---- sender ----------------------------------------------------------------
 
-/// Send a complete frame over the console UART. Synchronous, blocking on
-/// each byte (the LPC1768 driver polls THRE).
+/// Send a complete frame over the console UART.
+///
+/// Synchronous, blocking on each byte (the LPC1768 driver polls THRE).
 pub fn send(kind: u8, payload: &[u8]) {
     let mut uart = <Mcu as Board>::Tx::default();
     let len = payload.len() as u16;

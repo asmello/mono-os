@@ -16,6 +16,37 @@ or crate.
 
 ## Rust style
 
+### Doc comments start with a single header line, then a blank line
+
+`///` and `//!` blocks should open with a one-line summary, then `///` (or
+`//!`) with no further text, and only then the rest of the body. Rustdoc
+treats the first paragraph as the short description shown in module
+listings and search results — if the summary wraps across multiple `///`
+lines without a blank in between, rustdoc concatenates the whole thing
+into the brief.
+
+Good:
+
+```rust
+/// Snapshot DWT cycles and longjmp out of handler mode.
+///
+/// Called by the SVCall / fault / timer-match paths once they've
+/// recorded status+payload.
+fn abort_to_kernel() -> ! { … }
+```
+
+Bad (no blank line — the brief becomes the whole paragraph):
+
+```rust
+/// Snapshot DWT cycles and longjmp out of handler mode. Called by the
+/// SVCall / fault / timer-match paths once they've recorded
+/// status+payload.
+fn abort_to_kernel() -> ! { … }
+```
+
+If the entire comment is a single short sentence that fits on one line,
+no body and no blank line are needed.
+
 ### `.expect()` messages describe invariants, not errors
 
 `.expect("msg")` should encode the invariant that makes unwrapping safe — the

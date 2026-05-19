@@ -1,5 +1,4 @@
-//! Board driver for the Stellaris LM3S6965 (as emulated by QEMU's
-//! `lm3s6965evb` machine).
+//! Board driver for the Stellaris LM3S6965 (QEMU `lm3s6965evb` machine).
 //!
 //! Provides a blocking TX-only UART0 driver and a one-shot deadline timer
 //! built on General-Purpose Timer Module 0 (GPTM0, Timer A). Register
@@ -45,9 +44,10 @@ pub struct Lm3s6965evb;
 
 impl super::Board for Lm3s6965evb {
     /// Approximate emulated core clock under QEMU's `lm3s6965evb` machine.
+    ///
     /// The chip's real reset clock is PIOSC at 6 MHz, but QEMU's stellaris
-    /// timing is not authoritative — this is a ballpark value chosen to give
-    /// a roughly visible tick rate.
+    /// timing is not authoritative — this is a ballpark value chosen to
+    /// give a roughly visible tick rate.
     const CCLK_HZ: u32 = 12_000_000;
 
     type Tx = Uart;
@@ -71,11 +71,12 @@ impl super::UartTx for Uart {
     }
 }
 
-/// GPTM0 Timer A as a one-shot match interrupt. `arm_in_cycles` loads the
-/// requested cycle count into GPTMTAILR and enables the timer; when it
-/// counts down to zero the timer raises TATOIM, NVIC line 19 fires, and
-/// the handler [`Gpt0aHandler`] acks the peripheral and signals the
-/// kernel via [`crate::timeout::mark_fired`].
+/// GPTM0 Timer A as a one-shot match interrupt.
+///
+/// `arm_in_cycles` loads the requested cycle count into GPTMTAILR and
+/// enables the timer; when it counts down to zero the timer raises TATOIM,
+/// NVIC line 19 fires, and the handler [`Gpt0aHandler`] acks the peripheral
+/// and signals the kernel via [`crate::timeout::mark_fired`].
 pub struct Gpt0;
 
 impl super::TimeoutTimer for Gpt0 {
@@ -120,9 +121,10 @@ impl super::TimeoutTimer for Gpt0 {
     }
 }
 
-/// Interrupt handler for GPT0 Timer A timeout (NVIC IRQ 19). Routed into
-/// the lm3s6965 PAC's vector table by the `#[interrupt]` attribute, which
-/// resolves the variant against `lm3s6965::Interrupt`.
+/// Interrupt handler for GPT0 Timer A timeout (NVIC IRQ 19).
+///
+/// Routed into the lm3s6965 PAC's vector table by the `#[interrupt]`
+/// attribute, which resolves the variant against `lm3s6965::Interrupt`.
 #[interrupt]
 fn TIMER_0A() {
     unsafe {
@@ -131,9 +133,11 @@ fn TIMER_0A() {
     crate::user::on_timeout_match();
 }
 
-/// UART0 receive side. QEMU's emulated PL011 raises the RX interrupt as
-/// bytes arrive on the `-serial` backend. The ISR drains UARTDR into
-/// [`RX_RING`]; [`read_byte`] pops one non-blockingly.
+/// UART0 receive side.
+///
+/// QEMU's emulated PL011 raises the RX interrupt as bytes arrive on the
+/// `-serial` backend. The ISR drains UARTDR into [`RX_RING`];
+/// [`read_byte`] pops one non-blockingly.
 pub struct Uart0Rx;
 
 static RX_RING: SpscRing<512> = SpscRing::new();

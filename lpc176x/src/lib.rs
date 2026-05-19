@@ -1,5 +1,4 @@
-//! Interrupt bindings for the NXP LPC176x family of ARM Cortex-M3
-//! microcontrollers.
+//! Interrupt bindings for the NXP LPC176x ARM Cortex-M3 family.
 //!
 //! Shaped like a peripheral access crate (PAC) but covers only what
 //! cortex-m-rt's `#[interrupt]` attribute needs: the `Interrupt` enum
@@ -65,9 +64,11 @@ unsafe impl cortex_m::interrupt::InterruptNumber for Interrupt {
     }
 }
 
-/// Single slot in `.vector_table.interrupts`. Same shape as cortex-m-rt's
-/// private `Vector` union; we mirror it here because the fields on theirs
-/// are `doc(hidden)` and so cannot be constructed from outside the crate.
+/// Single slot in `.vector_table.interrupts`.
+///
+/// Same shape as cortex-m-rt's private `Vector` union; we mirror it here
+/// because the fields on theirs are `doc(hidden)` and so cannot be
+/// constructed from outside the crate.
 #[doc(hidden)]
 #[repr(C)]
 pub union Vector {

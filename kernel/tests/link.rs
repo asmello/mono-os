@@ -27,6 +27,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 /// Compose a frame in `out` and return the number of bytes written.
+///
 /// Format matches what the kernel sender produces.
 fn build_frame(kind: u8, payload: &[u8], out: &mut [u8]) -> usize {
     let mut crc = Crc32::new();

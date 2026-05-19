@@ -39,9 +39,11 @@ impl<const N: usize> SpscRing<N> {
         }
     }
 
-    /// Push one byte. If the ring is full, the byte is dropped (the host
-    /// will retransmit on the resulting CRC failure). Must only be called
-    /// from the producer side.
+    /// Push one byte.
+    ///
+    /// If the ring is full, the byte is dropped (the host will retransmit
+    /// on the resulting CRC failure). Must only be called from the
+    /// producer side.
     pub fn push(&self, byte: u8) {
         let head = self.head.load(Ordering::Relaxed);
         let tail = self.tail.load(Ordering::Acquire);
@@ -53,8 +55,10 @@ impl<const N: usize> SpscRing<N> {
         self.head.store(next, Ordering::Release);
     }
 
-    /// Pop one byte. Returns `None` if the ring is empty. Must only be
-    /// called from the consumer side.
+    /// Pop one byte.
+    ///
+    /// Returns `None` if the ring is empty. Must only be called from the
+    /// consumer side.
     pub fn pop(&self) -> Option<u8> {
         let tail = self.tail.load(Ordering::Relaxed);
         let head = self.head.load(Ordering::Acquire);

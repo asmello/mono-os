@@ -1,6 +1,7 @@
-//! Run one untrusted program in unprivileged thread mode on PSP, under
-//! MPU-enforced memory protection and a hardware timeout. Terminate on
-//! `exit` syscall, fault, or deadline; report status + cycle count.
+//! Run one untrusted program under MPU and a hardware deadline.
+//!
+//! Drops to unprivileged thread mode on PSP, terminates on `exit` syscall,
+//! fault, or deadline, and reports status + cycle count back to the caller.
 //!
 //! ## Privilege transition
 //!
@@ -118,18 +119,23 @@ impl AbortStatus {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct AbortResult {
     pub status: AbortStatus,
-    /// Exit code on [`AbortStatus::Ok`]; fault address (or CFSR snapshot) on
-    /// faults; SVC immediate on unknown syscalls; 0 on timeout.
+    /// Reason payload depending on `status`.
+    ///
+    /// Exit code on [`AbortStatus::Ok`]; fault address (or CFSR snapshot)
+    /// on faults; SVC immediate on unknown syscalls; 0 on timeout.
     pub payload: u32,
-    /// CPU cycles from launch snapshot to abort handler. Useful only when the
-    /// DWT counter is actually ticking (real hardware; QEMU's
-    /// `lm3s6965evb` machine leaves CYCCNT stuck).
+    /// CPU cycles from launch snapshot to abort handler.
+    ///
+    /// Useful only when the DWT counter is actually ticking (real hardware;
+    /// QEMU's `lm3s6965evb` machine leaves CYCCNT stuck).
     pub cycles: u64,
 }
 
-/// Initialize the user-execution subsystem. Enables MemManage / BusFault /
-/// UsageFault as individually-vectored handlers (they otherwise escalate
-/// straight to HardFault and we lose the abort-reason granularity).
+/// Initialize the user-execution subsystem.
+///
+/// Enables MemManage / BusFault / UsageFault as individually-vectored
+/// handlers (they otherwise escalate straight to HardFault and we lose the
+/// abort-reason granularity).
 pub fn init() {
     const SCB_SHCSR: *mut u32 = 0xE000_ED24 as *mut u32;
     const SHCSR_MEMFAULTENA: u32 = 1 << 16;
@@ -144,15 +150,18 @@ pub fn init() {
     }
 }
 
-/// Capacity available to user code (`USER_TEXT_SIZE` minus the trampoline
-/// the kernel installs at the start of the user_text region).
+/// Capacity available to user code.
+///
+/// `USER_TEXT_SIZE` minus the trampoline the kernel installs at the start
+/// of the user_text region.
 pub fn user_text_capacity() -> usize {
     USER_TEXT_SIZE - trampoline_bytes().len()
 }
 
-/// Run `program` to termination and report what happened. Convenience over
-/// [`launch_loaded`] that handles the byte-copy itself; used by tests that
-/// already have a `&'static [u8]` source slice.
+/// Run `program` to termination and report what happened.
+///
+/// Convenience over [`launch_loaded`] that handles the byte-copy itself;
+/// used by tests that already have a `&'static [u8]` source slice.
 pub fn launch(program: &UserProgram) -> AbortResult {
     if program.text.len() > user_text_capacity() {
         return AbortResult {
@@ -179,9 +188,10 @@ pub fn launch(program: &UserProgram) -> AbortResult {
     })
 }
 
-/// A program whose bytes are already in user_text/user_data — typically
-/// because the monolink loader streamed them in. The kernel still owns
-/// trampoline installation, .bss zeroing, MPU bring-up, and dispatch.
+/// A program whose bytes are already in user_text/user_data.
+///
+/// Typically because the monolink loader streamed them in. The kernel still
+/// owns trampoline installation, .bss zeroing, MPU bring-up, and dispatch.
 pub struct LoadedProgram {
     pub entry_offset: u32,
     pub text_size: u32,
@@ -191,7 +201,9 @@ pub struct LoadedProgram {
 }
 
 /// Launch a program that's already been loaded into user_text / user_data.
+///
 /// The caller (typically the monolink loader) must have:
+///
 ///   * written `text_size` bytes starting at `USER_TEXT_BASE + trampoline_len`
 ///   * written `data_size` bytes starting at `USER_DATA_BASE`
 ///
@@ -270,9 +282,10 @@ pub fn launch_loaded(program: LoadedProgram) -> AbortResult {
     }
 }
 
-/// Streaming loader for the monolink CHUNK path. Tracks where the next
-/// byte goes (user_text first up to `text_size`, then user_data). The
-/// kernel does the `.bss` zero on launch, not here.
+/// Streaming loader for the monolink CHUNK path.
+///
+/// Tracks where the next byte goes (user_text first up to `text_size`, then
+/// user_data). The kernel does the `.bss` zero on launch, not here.
 pub struct Loader {
     text_size: u32,
     data_size: u32,
@@ -304,9 +317,10 @@ impl Loader {
         })
     }
 
-    /// Append `chunk` bytes at the current write position. Returns the
-    /// new cumulative byte count, or an error if the write would exceed
-    /// `text_size + data_size`.
+    /// Append `chunk` bytes at the current write position.
+    ///
+    /// Returns the new cumulative byte count, or an error if the write
+    /// would exceed `text_size + data_size`.
     pub fn append(&mut self, chunk: &[u8]) -> Result<u32, LoaderError> {
         let end = self
             .written
@@ -354,6 +368,7 @@ struct KernelCtx {
     // R4..R11 — callee-saved by the AAPCS.
     r4_r11: [u32; 8],
     /// MSP value just before `push {r4-r11, lr}` in [`launch_user_asm`].
+    ///
     /// Restoring this drops the launch frame and any handler activations
     /// above it on the kernel stack.
     msp: u32,
@@ -419,9 +434,10 @@ fn trampoline_bytes() -> &'static [u8] {
 
 // ---- naked entry / resume ---------------------------------------------------
 
-/// Save kernel callee-saves and hand off to the in-RAM trampoline that
-/// drops privilege. Never returns in the usual sense — control comes back
-/// through [`longjmp_from_handler`] from an exception handler.
+/// Save kernel callee-saves and hand off to the in-RAM privilege-drop trampoline.
+///
+/// Never returns in the usual sense — control comes back through
+/// [`longjmp_from_handler`] from an exception handler.
 ///
 /// AAPCS args: R0 = user entry, R1 = user stack top, R2 = ctx pointer,
 /// R3 = trampoline entry (in user_text RAM, Thumb bit set). R0 is passed
@@ -503,8 +519,10 @@ unsafe extern "C" fn longjmp_from_handler(_val: u32, _ctx: *const KernelCtx) -> 
     );
 }
 
-/// Snapshot DWT cycles and longjmp out of handler mode. Called by the
-/// SVCall / fault / timer-match paths once they've recorded status+payload.
+/// Snapshot DWT cycles and longjmp out of handler mode.
+///
+/// Called by the SVCall / fault / timer-match paths once they've recorded
+/// status+payload.
 #[inline(always)]
 unsafe fn abort_to_kernel() -> ! {
     ABORT_END_LOW.store(DWT::cycle_count(), Ordering::Relaxed);
@@ -512,10 +530,11 @@ unsafe fn abort_to_kernel() -> ! {
     unsafe { longjmp_from_handler(0, ctx) }
 }
 
-/// Hook for the per-board timeout interrupt: if a user program is running,
-/// abort it with [`AbortStatus::Timeout`]. Otherwise fall through to the
-/// regular [`crate::timeout::mark_fired`] path so the M0 timeout tests keep
-/// working.
+/// Hook for the per-board timeout interrupt.
+///
+/// If a user program is running, abort it with [`AbortStatus::Timeout`].
+/// Otherwise fall through to the regular [`crate::timeout::mark_fired`]
+/// path so the M0 timeout tests keep working.
 #[inline]
 pub fn on_timeout_match() {
     if USER_RUNNING.swap(false, Ordering::Relaxed) {

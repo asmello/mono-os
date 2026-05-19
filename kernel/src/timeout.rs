@@ -18,8 +18,9 @@ pub fn init() {
     Timer::init();
 }
 
-/// Arm a one-shot deadline `cycles` CCLK cycles from now. Resets [`fired`]
-/// so callers can wait on a fresh edge.
+/// Arm a one-shot deadline `cycles` CCLK cycles from now.
+///
+/// Resets [`fired`] so callers can wait on a fresh edge.
 pub fn arm_in_cycles(cycles: u32) {
     FIRED.store(false, Ordering::Relaxed);
     Timer::arm_in_cycles(cycles);
@@ -33,8 +34,9 @@ pub fn fired() -> bool {
     FIRED.load(Ordering::Relaxed)
 }
 
-/// Called from the board's timer interrupt handler after it has acked the
-/// peripheral. Safe to call multiple times.
+/// Called from the board's timer interrupt handler after it has acked the peripheral.
+///
+/// Safe to call multiple times.
 pub fn mark_fired() {
     FIRED.store(true, Ordering::Relaxed);
 }

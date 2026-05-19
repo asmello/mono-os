@@ -175,8 +175,10 @@ fn setup_uart0_115200() {
 pub struct Lpc1768;
 
 impl super::Board for Lpc1768 {
-    /// CCLK after `init()`: 96 MHz, sourced from the mbed's 12 MHz crystal
-    /// via PLL0 (M=12, N=1, /3). Crystal-stable, ~50 ppm.
+    /// CCLK after `init()`: 96 MHz.
+    ///
+    /// Sourced from the mbed's 12 MHz crystal via PLL0 (M=12, N=1, /3).
+    /// Crystal-stable, ~50 ppm.
     const CCLK_HZ: u32 = 96_000_000;
 
     type Tx = UartTx;
@@ -201,9 +203,10 @@ impl super::UartTx for UartTx {
     }
 }
 
-/// Timer0 as a one-shot match interrupt. PCLK_TIMER0 is set to CCLK/1
-/// (96 MHz) so the Timer Counter increments once per CCLK cycle and MR0
-/// holds the deadline in CCLK cycles directly.
+/// Timer0 as a one-shot match interrupt.
+///
+/// PCLK_TIMER0 is set to CCLK/1 (96 MHz) so the Timer Counter increments
+/// once per CCLK cycle and MR0 holds the deadline in CCLK cycles directly.
 pub struct Timer0;
 
 impl super::TimeoutTimer for Timer0 {
@@ -254,9 +257,10 @@ impl super::TimeoutTimer for Timer0 {
     }
 }
 
-/// Interrupt handler for Timer0 (NVIC IRQ 1). Routed into the local
-/// `lpc176x` PAC's vector table by the `#[interrupt]` attribute, which
-/// resolves the variant against `lpc176x::Interrupt`.
+/// Interrupt handler for Timer0 (NVIC IRQ 1).
+///
+/// Routed into the local `lpc176x` PAC's vector table by the `#[interrupt]`
+/// attribute, which resolves the variant against `lpc176x::Interrupt`.
 #[interrupt]
 fn TIMER0() {
     unsafe {
@@ -265,10 +269,11 @@ fn TIMER0() {
     crate::user::on_timeout_match();
 }
 
-/// UART0 receive side. The ISR drains the RX FIFO into [`RX_RING`]
-/// (SPSC: ISR producer, main-thread consumer); [`read_byte`] pops one
-/// without blocking. Overruns drop bytes — the host retransmits on CRC
-/// failure.
+/// UART0 receive side.
+///
+/// The ISR drains the RX FIFO into [`RX_RING`] (SPSC: ISR producer,
+/// main-thread consumer); [`read_byte`] pops one without blocking.
+/// Overruns drop bytes — the host retransmits on CRC failure.
 pub struct Uart0Rx;
 
 static RX_RING: SpscRing<512> = SpscRing::new();
