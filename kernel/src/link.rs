@@ -24,9 +24,10 @@
 use crate::board::{Board, Mcu, UartRx, UartTx};
 
 pub use monolink_proto::{
-    BadReason, CHUNK_MAX, Crc32, ExecHeader, Frame, NakReason, Parser, Poll, ResultFrame, SOF,
-    STATUS_BUSFAULT, STATUS_LOAD_ERROR, STATUS_MEMFAULT, STATUS_OK, STATUS_TIMEOUT,
-    STATUS_USAGEFAULT, TYPE_ACK, TYPE_CHUNK, TYPE_EOF, TYPE_NAK, TYPE_RESULT, TYPE_START_LOAD,
+    BadReason, CHUNK_MAX, CaseResultFrame, Crc32, ExecHeader, Frame, NakReason, Parser, Poll,
+    ResultFrame, SOF, STATUS_BUSFAULT, STATUS_LOAD_ERROR, STATUS_MEMFAULT, STATUS_OK,
+    STATUS_TIMEOUT, STATUS_USAGEFAULT, TYPE_ACK, TYPE_CASE, TYPE_CASE_END, TYPE_CASE_OUTPUT,
+    TYPE_CASE_RESULT, TYPE_CHUNK, TYPE_EOF, TYPE_NAK, TYPE_RESULT, TYPE_RUN_END, TYPE_START_LOAD,
 };
 
 /// Pull a byte off the UART RX ring and advance the parser one step.
@@ -66,6 +67,22 @@ pub fn send(kind: u8, payload: &[u8]) {
 
 pub fn send_ack() {
     send(TYPE_ACK, &[]);
+}
+
+/// Send a [`TYPE_CASE_RESULT`] frame.
+///
+/// Output bytes (if any) ship in preceding [`TYPE_CASE_OUTPUT`] frames; the
+/// summary itself is fixed-size.
+pub fn send_case_result(status: u8, exit_code: u32, cycles: u64) {
+    let mut bytes = [0u8; CaseResultFrame::SIZE];
+    CaseResultFrame {
+        status,
+        _pad: [0; 3],
+        exit_code,
+        cycles,
+    }
+    .write_le(&mut bytes);
+    send(TYPE_CASE_RESULT, &bytes);
 }
 
 /// Send a NAK with a one-byte reason payload.

@@ -24,9 +24,14 @@
 pub const TYPE_START_LOAD: u8 = 0x01;
 pub const TYPE_CHUNK: u8 = 0x02;
 pub const TYPE_EOF: u8 = 0x03;
+pub const TYPE_CASE: u8 = 0x04;
+pub const TYPE_CASE_END: u8 = 0x05;
+pub const TYPE_RUN_END: u8 = 0x06;
 pub const TYPE_ACK: u8 = 0x10;
 pub const TYPE_NAK: u8 = 0x11;
 pub const TYPE_RESULT: u8 = 0x20;
+pub const TYPE_CASE_OUTPUT: u8 = 0x21;
+pub const TYPE_CASE_RESULT: u8 = 0x22;
 
 pub const SOF: u8 = 0x55;
 
@@ -68,6 +73,12 @@ pub enum NakReason {
     LoaderDataTooLarge = 10,
     /// A chunk wrote past the declared `text_size + data_size`.
     LoaderOverflow = 11,
+    /// `CASE` / `CASE_END` arrived before a program was loaded.
+    CaseBeforeRun = 12,
+    /// `RUN_END` arrived before a program was loaded.
+    RunEndBeforeRun = 13,
+    /// Accumulated `CASE` payload exceeded the device input buffer.
+    CaseInputOverflow = 14,
 }
 
 impl NakReason {
@@ -85,6 +96,9 @@ impl NakReason {
             9 => Self::LoaderTextTooLarge,
             10 => Self::LoaderDataTooLarge,
             11 => Self::LoaderOverflow,
+            12 => Self::CaseBeforeRun,
+            13 => Self::RunEndBeforeRun,
+            14 => Self::CaseInputOverflow,
             _ => Self::Unspecified,
         }
     }
@@ -103,6 +117,9 @@ impl NakReason {
             Self::LoaderTextTooLarge => "text_size exceeds user-text capacity",
             Self::LoaderDataTooLarge => "data_size + bss_size exceeds user-data size",
             Self::LoaderOverflow => "chunk wrote past declared body length",
+            Self::CaseBeforeRun => "case frame before program loaded",
+            Self::RunEndBeforeRun => "run_end before program loaded",
+            Self::CaseInputOverflow => "accumulated case input exceeds device buffer",
         }
     }
 }
@@ -220,6 +237,45 @@ impl ResultFrame {
             exit_code: u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
             cycles: u64::from_le_bytes(bytes[8..16].try_into().unwrap()),
             cclk_hz: u32::from_le_bytes(bytes[16..20].try_into().unwrap()),
+        })
+    }
+}
+
+/// 16-byte payload of a [`TYPE_CASE_RESULT`] frame.
+///
+/// One per case. Output bytes are *not* inline — they ride on separate
+/// [`TYPE_CASE_OUTPUT`] frames sent before this summary, which the host
+/// accumulates per-case.
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct CaseResultFrame {
+    pub status: u8,
+    pub _pad: [u8; 3],
+    pub exit_code: u32,
+    pub cycles: u64,
+}
+
+impl CaseResultFrame {
+    pub const SIZE: usize = 16;
+
+    pub fn write_le(&self, out: &mut [u8; Self::SIZE]) {
+        out[0] = self.status;
+        out[1..4].copy_from_slice(&self._pad);
+        out[4..8].copy_from_slice(&self.exit_code.to_le_bytes());
+        out[8..16].copy_from_slice(&self.cycles.to_le_bytes());
+    }
+
+    pub fn parse(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != Self::SIZE {
+            return None;
+        }
+        let mut pad = [0u8; 3];
+        pad.copy_from_slice(&bytes[1..4]);
+        Some(Self {
+            status: bytes[0],
+            _pad: pad,
+            exit_code: u32::from_le_bytes(bytes[4..8].try_into().unwrap()),
+            cycles: u64::from_le_bytes(bytes[8..16].try_into().unwrap()),
         })
     }
 }

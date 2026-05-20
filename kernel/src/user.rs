@@ -400,6 +400,194 @@ static ABORT_PAYLOAD: AtomicU32 = AtomicU32::new(0);
 static START_CYCLES_LOW: AtomicU32 = AtomicU32::new(0);
 static ABORT_END_LOW: AtomicU32 = AtomicU32::new(0);
 
+// ---- case I/O ---------------------------------------------------------------
+//
+// `CaseIo` and `DataInitImage` are bag-of-state structs grouped to mirror the
+// conceptual unit they belong to. Each field is what an equivalent loose
+// `static` would have been — an `UnsafeCell<[u8; _]>` for the byte buffers
+// (driven by single-threaded kernel context: case driver in thread mode vs
+// SVCall handler, never simultaneously), and `AtomicU32`s for cursors/lengths.
+// Methods inline at -O2 to the same accesses, so there's no runtime cost
+// versus the loose-statics layout.
+
+/// Per-case input + output capacity, in bytes.
+///
+/// A single case's accumulated `TYPE_CASE` payload bytes can fill this on
+/// the input side, and `write()` calls fill the output side. Hosts whose
+/// cases exceed this need to split across multiple `TYPE_CASE` frames —
+/// the kernel still rejects anything that overruns this cap.
+pub const CASE_IO_LEN: usize = 1024;
+
+/// I/O scratch for a single case.
+pub struct CaseIo {
+    input: UnsafeCell<[u8; CASE_IO_LEN]>,
+    input_len: AtomicU32,
+    input_cursor: AtomicU32,
+    output: UnsafeCell<[u8; CASE_IO_LEN]>,
+    output_len: AtomicU32,
+}
+
+// SAFETY: kernel is single-threaded. The case driver in main.rs (thread
+// mode) and the SVCall handler (handler mode) are never on the CPU at the
+// same time — exceptions return to thread mode before the next syscall —
+// so the implicit `&self` borrows can't alias.
+unsafe impl Sync for CaseIo {}
+
+/// Overflow returned by [`CaseIo::append_input`] / [`CaseIo::write_from_user`].
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct CaseOverflow {
+    /// Total size that would have been needed, in bytes.
+    pub needed: u32,
+}
+
+impl CaseIo {
+    /// Append a chunk to the input buffer.
+    pub fn append_input(&self, bytes: &[u8]) -> Result<(), CaseOverflow> {
+        let cur = self.input_len.load(Ordering::Relaxed) as usize;
+        let needed = cur + bytes.len();
+        if needed > CASE_IO_LEN {
+            return Err(CaseOverflow {
+                needed: needed as u32,
+            });
+        }
+        // SAFETY: see `unsafe impl Sync` above. Single accessor at a time.
+        unsafe {
+            let dst = (self.input.get() as *mut u8).add(cur);
+            ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
+        }
+        self.input_len.store(needed as u32, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// Clear the input buffer for the next case.
+    pub fn reset_input(&self) {
+        self.input_len.store(0, Ordering::Relaxed);
+        self.input_cursor.store(0, Ordering::Relaxed);
+    }
+
+    /// Reset cursors/lengths for the in-flight case's launch.
+    ///
+    /// Leaves the input bytes in place; resets the read cursor so the user
+    /// program sees them from byte 0, and clears any output state from a
+    /// previous case.
+    pub fn prepare_for_launch(&self) {
+        self.input_cursor.store(0, Ordering::Relaxed);
+        self.output_len.store(0, Ordering::Relaxed);
+    }
+
+    /// Drain bytes into the user's buffer (SVC #2 / `read`).
+    ///
+    /// # Safety
+    ///
+    /// `dst` must be a writable `max`-byte buffer in the active user_data
+    /// region — only the syscall handler should call this.
+    pub unsafe fn read_into_user(&self, dst: *mut u8, max: usize) -> usize {
+        let cursor = self.input_cursor.load(Ordering::Relaxed) as usize;
+        let avail = self.input_len.load(Ordering::Relaxed) as usize - cursor;
+        let n = avail.min(max);
+        // SAFETY: caller guarantees `dst` is valid for `max` bytes; we
+        // copy `n ≤ max` from the kernel-side input buffer.
+        unsafe {
+            let src = (self.input.get() as *const u8).add(cursor);
+            ptr::copy_nonoverlapping(src, dst, n);
+        }
+        self.input_cursor
+            .store((cursor + n) as u32, Ordering::Relaxed);
+        n
+    }
+
+    /// Append bytes from the user (SVC #3 / `write`).
+    ///
+    /// # Safety
+    ///
+    /// `src` must be a readable `len`-byte buffer in the active user_data
+    /// or user_stack region.
+    pub unsafe fn write_from_user(&self, src: *const u8, len: usize) -> Result<(), CaseOverflow> {
+        let cur = self.output_len.load(Ordering::Relaxed) as usize;
+        let needed = cur + len;
+        if needed > CASE_IO_LEN {
+            return Err(CaseOverflow {
+                needed: needed as u32,
+            });
+        }
+        // SAFETY: caller guarantees `src` is valid for `len` bytes; the
+        // destination is our own kernel-side output buffer.
+        unsafe {
+            let dst = (self.output.get() as *mut u8).add(cur);
+            ptr::copy_nonoverlapping(src, dst, len);
+        }
+        self.output_len.store(needed as u32, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// Slice over the bytes the user wrote since the last
+    /// [`prepare_for_launch`](Self::prepare_for_launch).
+    pub fn output(&self) -> &[u8] {
+        let len = self.output_len.load(Ordering::Relaxed) as usize;
+        // SAFETY: see `unsafe impl Sync`; called from the case driver
+        // *after* the user program has exited or aborted, so no other
+        // accessor exists.
+        unsafe { core::slice::from_raw_parts(self.output.get() as *const u8, len) }
+    }
+}
+
+pub static CASE_IO: CaseIo = CaseIo {
+    input: UnsafeCell::new([0; CASE_IO_LEN]),
+    input_len: AtomicU32::new(0),
+    input_cursor: AtomicU32::new(0),
+    output: UnsafeCell::new([0; CASE_IO_LEN]),
+    output_len: AtomicU32::new(0),
+};
+
+/// Snapshot of the loaded `.data` init image, used to reset user state
+/// between cases.
+pub struct DataInitImage {
+    bytes: UnsafeCell<[u8; USER_DATA_SIZE]>,
+    data_len: AtomicU32,
+    bss_len: AtomicU32,
+}
+
+// SAFETY: same single-threaded invariant as [`CaseIo`].
+unsafe impl Sync for DataInitImage {}
+
+impl DataInitImage {
+    /// Snapshot the currently-loaded `.data` into the kernel-side image.
+    ///
+    /// Call once at EOF, after the loader has populated `USER_DATA_BASE`.
+    pub fn capture(&self, data_size: u32, bss_size: u32) {
+        let len = data_size as usize;
+        // SAFETY: USER_DATA_BASE points at a `USER_DATA_SIZE`-byte region
+        // the loader just wrote; we read up to `data_size` bytes.
+        unsafe {
+            let src = USER_DATA_BASE as *const u8;
+            let dst = self.bytes.get() as *mut u8;
+            ptr::copy_nonoverlapping(src, dst, len);
+        }
+        self.data_len.store(data_size, Ordering::Relaxed);
+        self.bss_len.store(bss_size, Ordering::Relaxed);
+    }
+
+    /// Restore `.data` from the image and zero `.bss` for the next case.
+    pub fn restore_to_user_data(&self) {
+        let data_len = self.data_len.load(Ordering::Relaxed) as usize;
+        let bss_len = self.bss_len.load(Ordering::Relaxed) as usize;
+        // SAFETY: USER_DATA_BASE is the start of the user_data MPU
+        // region; we own this RAM and the user isn't running yet.
+        unsafe {
+            let src = self.bytes.get() as *const u8;
+            let dst = USER_DATA_BASE as *mut u8;
+            ptr::copy_nonoverlapping(src, dst, data_len);
+            ptr::write_bytes(dst.add(data_len), 0, bss_len);
+        }
+    }
+}
+
+pub static DATA_INIT_IMAGE: DataInitImage = DataInitImage {
+    bytes: UnsafeCell::new([0; USER_DATA_SIZE]),
+    data_len: AtomicU32::new(0),
+    bss_len: AtomicU32::new(0),
+};
+
 // ---- privilege-drop trampoline ---------------------------------------------
 //
 // Lives in flash as four Thumb instructions: `movs r3,#3; msr control,r3;
@@ -594,6 +782,31 @@ unsafe fn SVCall() {
             }
             // Normal exception return: cortex-m-rt's trampoline bxs the
             // EXC_RETURN value that was loaded into LR on entry.
+        }
+        2 => {
+            // read(buf_ptr: *mut u8, max: u32) -> u32 (bytes read)
+            let dst = unsafe { ptr::read_volatile(frame.add(0)) } as *mut u8;
+            let max = unsafe { ptr::read_volatile(frame.add(1)) } as usize;
+            // SAFETY: dst lives in the user_data MPU region; kernel
+            // privileged-mode writes through it are allowed.
+            let n = unsafe { CASE_IO.read_into_user(dst, max) };
+            unsafe { ptr::write_volatile(frame.add(0), n as u32) };
+        }
+        3 => {
+            // write(buf_ptr: *const u8, len: u32)
+            let src = unsafe { ptr::read_volatile(frame.add(0)) } as *const u8;
+            let len = unsafe { ptr::read_volatile(frame.add(1)) } as usize;
+            // SAFETY: src lives in a user-readable MPU region; the read
+            // happens from privileged mode here.
+            match unsafe { CASE_IO.write_from_user(src, len) } {
+                Ok(()) => { /* no return value */ }
+                Err(overflow) => {
+                    ABORT_STATUS.store(STATUS_USAGEFAULT, Ordering::Relaxed);
+                    ABORT_PAYLOAD.store(overflow.needed, Ordering::Relaxed);
+                    USER_RUNNING.store(false, Ordering::Relaxed);
+                    unsafe { abort_to_kernel() }
+                }
+            }
         }
         _ => {
             // Unknown SVC immediate — treat as a usage fault.

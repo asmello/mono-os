@@ -56,6 +56,47 @@ pub fn time_cycles() -> u64 {
     ((hi as u64) << 32) | (lo as u64)
 }
 
+/// Pull bytes from the case input buffer (syscall #2).
+///
+/// Copies up to `buf.len()` bytes into `buf` and returns how many were
+/// copied. Subsequent calls drain the rest of the input incrementally;
+/// once everything has been consumed `read` returns 0.
+#[inline(always)]
+pub fn read(buf: &mut [u8]) -> usize {
+    let ptr = buf.as_mut_ptr();
+    let max = buf.len() as u32;
+    let n: u32;
+    unsafe {
+        asm!(
+            "svc #2",
+            inout("r0") ptr => n,
+            in("r1") max,
+            options(nostack, preserves_flags),
+        );
+    }
+    n as usize
+}
+
+/// Append bytes to the case output buffer (syscall #3).
+///
+/// Multiple calls concatenate. The kernel ships everything written before
+/// `exit()` back to the host as part of the case's RESULT. Writing past
+/// the device-side cap (currently 1 KiB) aborts the run with a usage
+/// fault.
+#[inline(always)]
+pub fn write(buf: &[u8]) {
+    let ptr = buf.as_ptr();
+    let len = buf.len() as u32;
+    unsafe {
+        asm!(
+            "svc #3",
+            in("r0") ptr,
+            in("r1") len,
+            options(nostack, preserves_flags),
+        );
+    }
+}
+
 /// Pin a function as the user-program entry point.
 ///
 /// Emits a `pub extern "C" fn _start()` in the `.text._start` section that

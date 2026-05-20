@@ -18,9 +18,10 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser as ClapParser, Subcommand};
 use monolink_proto::{
-    BadReason, CHUNK_MAX, Crc32, ExecHeader, NakReason, Parser, Poll as ProtoPoll, ResultFrame,
-    SOF, STATUS_BUSFAULT, STATUS_LOAD_ERROR, STATUS_MEMFAULT, STATUS_OK, STATUS_TIMEOUT,
-    STATUS_USAGEFAULT, TYPE_ACK, TYPE_CHUNK, TYPE_EOF, TYPE_NAK, TYPE_RESULT, TYPE_START_LOAD,
+    BadReason, CHUNK_MAX, CaseResultFrame, Crc32, ExecHeader, NakReason, Parser, Poll as ProtoPoll,
+    ResultFrame, SOF, STATUS_BUSFAULT, STATUS_LOAD_ERROR, STATUS_MEMFAULT, STATUS_OK,
+    STATUS_TIMEOUT, STATUS_USAGEFAULT, TYPE_ACK, TYPE_CASE, TYPE_CASE_END, TYPE_CASE_OUTPUT,
+    TYPE_CASE_RESULT, TYPE_CHUNK, TYPE_EOF, TYPE_NAK, TYPE_RESULT, TYPE_RUN_END, TYPE_START_LOAD,
 };
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use nix::sys::termios::{self, BaudRate, SetArg};
@@ -42,6 +43,14 @@ enum Cmd {
         bin: PathBuf,
         #[arg(long, default_value_t = 115_200)]
         baud: u32,
+        /// Cases file: sequence of `[u16 LE length][bytes]` records.
+        ///
+        /// Each record drives one program invocation; the kernel
+        /// relaunches the program with fresh `.data`/`.bss` per case.
+        /// If omitted, the host runs exactly one case with empty
+        /// input (compatible with single-shot programs).
+        #[arg(long)]
+        cases: Option<PathBuf>,
     },
     /// Turn a userlib-linked ELF into a monoexec .bin.
     Pack {
@@ -63,7 +72,12 @@ enum Cmd {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
-        Cmd::Upload { port, bin, baud } => upload(&port, &bin, baud),
+        Cmd::Upload {
+            port,
+            bin,
+            baud,
+            cases,
+        } => upload(&port, &bin, baud, cases.as_deref()),
         Cmd::Pack {
             elf,
             out,
@@ -205,7 +219,12 @@ fn expect_ack(file: &mut File, what: &str) -> Result<()> {
 
 // ---- upload ---------------------------------------------------------------
 
-fn upload(port_path: &str, bin: &PathBuf, baud: u32) -> Result<()> {
+fn upload(
+    port_path: &str,
+    bin: &PathBuf,
+    baud: u32,
+    cases_path: Option<&std::path::Path>,
+) -> Result<()> {
     let raw = std::fs::read(bin).with_context(|| format!("reading {}", bin.display()))?;
     if raw.len() < ExecHeader::SIZE {
         bail!(
@@ -226,6 +245,13 @@ fn upload(port_path: &str, bin: &PathBuf, baud: u32) -> Result<()> {
         );
     }
 
+    let cases: Vec<Vec<u8>> = match cases_path {
+        Some(p) => read_cases_file(p)?,
+        // No cases file: one synthetic empty case so single-shot programs
+        // get exactly one program invocation.
+        None => vec![Vec::new()],
+    };
+
     let mut port = open_serial(port_path, baud)?;
 
     // Give the kernel a moment to drain any boot log and arrive at the
@@ -233,6 +259,7 @@ fn upload(port_path: &str, bin: &PathBuf, baud: u32) -> Result<()> {
     std::thread::sleep(Duration::from_millis(100));
     let _ = termios::tcflush(port.as_fd(), termios::FlushArg::TCIOFLUSH);
 
+    // --- upload phase ---
     write_all(&mut port, &build_frame(TYPE_START_LOAD, header_bytes))?;
     expect_ack(&mut port, "START_LOAD")?;
 
@@ -244,9 +271,23 @@ fn upload(port_path: &str, bin: &PathBuf, baud: u32) -> Result<()> {
     write_all(&mut port, &build_frame(TYPE_EOF, &[]))?;
     expect_ack(&mut port, "EOF")?;
 
+    // --- case phase ---
+    for (idx, case) in cases.iter().enumerate() {
+        for (i, chunk) in case.chunks(CHUNK_MAX).enumerate() {
+            write_all(&mut port, &build_frame(TYPE_CASE, chunk))?;
+            expect_ack(&mut port, &format!("CASE[{idx}]@{}", i * CHUNK_MAX))?;
+        }
+        write_all(&mut port, &build_frame(TYPE_CASE_END, &[]))?;
+        let (cr, output) = read_case_result(&mut port)?;
+        print_case_result(idx, &cr, &output);
+    }
+
+    write_all(&mut port, &build_frame(TYPE_RUN_END, &[]))?;
+
+    // --- final result ---
     let (kind, payload) = read_frame(&mut port, Duration::from_secs(30))?;
     if kind != TYPE_RESULT {
-        bail!("expected RESULT, got type {kind:#04x}");
+        bail!("expected final RESULT, got type {kind:#04x}");
     }
     let r = ResultFrame::parse(&payload)
         .ok_or_else(|| anyhow!("bad RESULT length {}", payload.len()))?;
@@ -254,8 +295,63 @@ fn upload(port_path: &str, bin: &PathBuf, baud: u32) -> Result<()> {
     std::process::exit(if r.status == STATUS_OK { 0 } else { 2 });
 }
 
-fn print_result(r: &ResultFrame) {
-    let name = match r.status {
+/// Read frames until a `CASE_RESULT` arrives, accumulating any
+/// `CASE_OUTPUT` chunks along the way.
+fn read_case_result(port: &mut File) -> Result<(CaseResultFrame, Vec<u8>)> {
+    let mut output = Vec::new();
+    loop {
+        let (kind, payload) = read_frame(port, Duration::from_secs(30))?;
+        match kind {
+            TYPE_CASE_OUTPUT => output.extend_from_slice(&payload),
+            TYPE_CASE_RESULT => {
+                let cr = CaseResultFrame::parse(&payload)
+                    .ok_or_else(|| anyhow!("bad CASE_RESULT length {}", payload.len()))?;
+                return Ok((cr, output));
+            }
+            TYPE_NAK => {
+                let reason = payload
+                    .first()
+                    .copied()
+                    .map(NakReason::from_byte)
+                    .unwrap_or(NakReason::Unspecified);
+                bail!("device NAK'd during case: {reason}");
+            }
+            other => bail!("unexpected frame type {other:#04x} during case"),
+        }
+    }
+}
+
+/// Cases file format: a sequence of `[u16 LE length][bytes]` records.
+fn read_cases_file(path: &std::path::Path) -> Result<Vec<Vec<u8>>> {
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let mut cases = Vec::new();
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        if cursor + 2 > bytes.len() {
+            bail!(
+                "{}: truncated length prefix at offset {cursor}",
+                path.display()
+            );
+        }
+        let len = u16::from_le_bytes([bytes[cursor], bytes[cursor + 1]]) as usize;
+        cursor += 2;
+        if cursor + len > bytes.len() {
+            bail!(
+                "{}: case at offset {} claims {} bytes, only {} remain",
+                path.display(),
+                cursor - 2,
+                len,
+                bytes.len() - cursor,
+            );
+        }
+        cases.push(bytes[cursor..cursor + len].to_vec());
+        cursor += len;
+    }
+    Ok(cases)
+}
+
+fn status_name(status: u8) -> &'static str {
+    match status {
         STATUS_OK => "OK",
         STATUS_TIMEOUT => "TIMEOUT",
         STATUS_MEMFAULT => "MEMFAULT",
@@ -263,11 +359,29 @@ fn print_result(r: &ResultFrame) {
         STATUS_USAGEFAULT => "USAGEFAULT",
         STATUS_LOAD_ERROR => "LOAD_ERROR",
         _ => "?",
+    }
+}
+
+fn print_case_result(idx: usize, cr: &CaseResultFrame, output: &[u8]) {
+    let output_repr = if output.is_empty() {
+        "(none)".to_string()
+    } else {
+        let hex: String = output.iter().map(|b| format!("{b:02x}")).collect();
+        format!("0x{hex}")
     };
-    let micros = (r.cycles as f64) / (r.cclk_hz as f64) * 1e6;
     println!(
-        "status={name} exit={:#010x} cycles={} cclk_hz={} ({micros:.1} us)",
-        r.exit_code, r.cycles, r.cclk_hz,
+        "case[{idx}] status={} exit={:#010x} cycles={} output={output_repr}",
+        status_name(cr.status),
+        cr.exit_code,
+        cr.cycles,
+    );
+}
+
+fn print_result(r: &ResultFrame) {
+    println!(
+        "RESULT status={} cclk_hz={}",
+        status_name(r.status),
+        r.cclk_hz
     );
 }
 
