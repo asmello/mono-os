@@ -1,5 +1,5 @@
 [workspace]
-members = ["kernel", "lpc176x", "monolink-proto"]
+members = ["examples", "kernel", "lpc176x", "monolink-proto", "userlib"]
 # tools/monolink lives outside the workspace — it builds for the host while
 # everything inside this workspace builds for thumbv7m-none-eabi per
 # .cargo/config.toml. It path-depends on monolink-proto across the boundary.

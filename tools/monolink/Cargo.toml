@@ -14,3 +14,4 @@ clap = { version = "4", features = ["derive"] }
 libc = "0.2"
 monolink-proto = { path = "../../monolink-proto" }
 nix = { version = "0.30", features = ["poll", "term"] }
+object = { version = "0.36", default-features = false, features = ["read_core", "elf", "std"] }

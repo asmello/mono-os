@@ -1,0 +1,63 @@
+/* Linker layout for monolink user programs.
+ *
+ * MUST stay in sync with the kernel's USER_CODE_BASE / USER_DATA_BASE /
+ * region sizes (see `kernel/src/user.rs`). The kernel streams the binary
+ * onto these addresses; absolute fixups in the user code resolve against
+ * them.
+ *
+ * USER_TEXT is the user_text region minus the kernel-installed trampoline
+ * at its base. USER_DATA covers `.data` (init image) followed by `.bss`
+ * (zeroed by the kernel at launch).
+ *
+ * `@TOKEN@` placeholders are substituted by `userlib/build.rs` based on
+ * the active board feature.
+ */
+
+MEMORY
+{
+  USER_TEXT (rx) : ORIGIN = @USER_CODE_BASE@, LENGTH = @USER_TEXT_CAPACITY@
+  USER_DATA (rw) : ORIGIN = @USER_DATA_BASE@, LENGTH = @USER_DATA_SIZE@
+}
+
+ENTRY(_start)
+
+SECTIONS
+{
+  /* .text._start is anchored at offset 0 of USER_TEXT so the kernel can
+   * launch with entry_offset = 0. .text and .rodata share the user_text
+   * region (it's the only RX region available to unprivileged code). */
+  .text : ALIGN(4)
+  {
+    KEEP(*(.text._start))
+    *(.text .text.*)
+    *(.rodata .rodata.*)
+    . = ALIGN(4);
+  } > USER_TEXT
+
+  /* .data init image. The kernel writes these bytes verbatim into
+   * USER_DATA_BASE at load time. */
+  .data : ALIGN(4)
+  {
+    *(.data .data.*)
+    . = ALIGN(4);
+  } > USER_DATA
+
+  /* .bss is NOLOAD so its bytes never enter the on-wire image; the kernel
+   * zeros `bss_size` bytes after the .data window. */
+  .bss (NOLOAD) : ALIGN(4)
+  {
+    *(.bss .bss.*)
+    *(COMMON)
+    . = ALIGN(4);
+  } > USER_DATA
+
+  /DISCARD/ :
+  {
+    *(.ARM.exidx .ARM.exidx.*)
+    *(.ARM.extab .ARM.extab.*)
+    *(.eh_frame)
+    *(.eh_frame_hdr)
+    *(.note.gnu.build-id)
+    *(.comment)
+  }
+}

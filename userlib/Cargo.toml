@@ -1,0 +1,22 @@
+[package]
+name = "userlib"
+version = "0.1.0"
+edition = "2024"
+description = "Runtime + syscall shims + linker glue for monolink user programs."
+links = "userlib"
+
+[lib]
+# No tests: the crate is host-target-incompatible (it's no_std-only and
+# defines a #[panic_handler]). What needs validation lives in the example
+# programs that exercise it end-to-end.
+test = false
+
+[features]
+# Exactly one board feature must be set so the linker script knows where to
+# place .text / .data. Mirrors kernel/Cargo.toml's feature gating.
+default = ["lm3s6965evb"]
+lm3s6965evb = []
+lpc1768 = []
+# Default panic handler that exits with 0xFFFF_FFFF. Disable to provide your
+# own #[panic_handler].
+panic-handler = []

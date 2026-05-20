@@ -1,0 +1,19 @@
+[package]
+name = "examples"
+version = "0.1.0"
+edition = "2024"
+description = "Example user programs that run under the monolink kernel sandbox."
+publish = false
+
+# No `src/lib.rs` — every example is a standalone `[[bin]]` under `src/bin/`.
+# They build for thumbv7m-none-eabi (workspace default), link against
+# userlib using the user.x linker script, and end up as flat binaries via
+# the `tools/monolink pack` subcommand.
+
+[features]
+default = ["lm3s6965evb"]
+lm3s6965evb = ["userlib/lm3s6965evb"]
+lpc1768 = ["userlib/lpc1768"]
+
+[dependencies]
+userlib = { path = "../userlib", default-features = false, features = ["panic-handler"] }

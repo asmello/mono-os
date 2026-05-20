@@ -3,4 +3,7 @@ target = "thumbv7m-none-eabi"
 
 [target.thumbv7m-none-eabi]
 runner = "qemu-system-arm -cpu cortex-m3 -machine lm3s6965evb -nographic -semihosting-config enable=on,target=native -kernel"
-rustflags = ["-C", "link-arg=-Tlink.x"]
+# Linker scripts are selected per-crate via each crate's build.rs (kernel
+# pulls in cortex-m-rt's `link.x`; userlib-using crates pull in `user.x`).
+# Keeping the choice out of workspace rustflags avoids dragging `-Tlink.x`
+# into builds that don't depend on cortex-m-rt.

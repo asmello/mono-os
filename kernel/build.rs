@@ -21,6 +21,10 @@ fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR set by cargo"));
     fs::copy(source, out.join("memory.x")).expect("source memory.x exists and OUT_DIR is writable");
     println!("cargo:rustc-link-search={}", out.display());
+    // Pull in cortex-m-rt's link.x. Lives here (not in workspace rustflags)
+    // so sibling crates that don't depend on cortex-m-rt — userlib and the
+    // example user programs — get to choose their own linker script.
+    println!("cargo:rustc-link-arg=-Tlink.x");
     println!("cargo:rerun-if-changed={source}");
     println!("cargo:rerun-if-changed=build.rs");
 }
