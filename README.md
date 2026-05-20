@@ -2,7 +2,7 @@
 
 A small Cortex-M3 runtime that loads one precompiled program at a time, runs it under hardware memory protection with a fixed deadline, and reports cycle-accurate timing back to the host. Targets QEMU's `lm3s6965evb` machine and the mbed NXP LPC1768.
 
-The repo started as a port of Phil Opp's [Writing an OS in Rust](https://os.phil-opp.com/) to Cortex-M; the deterministic-single-program runtime is what it's grown into. The original port plan and rationale live in [`docs/arm-port.md`](docs/arm-port.md).
+The repo started as a port of Phil Opp's [Writing an OS in Rust](https://os.phil-opp.com/) to Cortex-M; the deterministic-single-program runtime is what it's grown into. Architecture is documented in [`docs/runtime.md`](docs/runtime.md); the original port plan is preserved at [`docs/history/arm-port.md`](docs/history/arm-port.md).
 
 ## Status
 
@@ -36,14 +36,23 @@ probe-rs drives the mbed's onboard CMSIS-DAP probe over SWD. The LPC1768 isn't i
 
 ### Uploading a user program
 
-The `monolink` host tool ships a `.bin` to a running kernel and prints the result. The wrapper script picks the host triple so cargo doesn't try to build it for thumbv7m.
+A user program is a no_std crate that depends on `userlib` (syscall shims, `entry!` macro, default panic handler, and a board-specific `user.x` linker script). The four programs in `examples/` are the canonical fixtures:
 
 ```sh
-./scripts/monolink.sh demo /tmp/exit42.bin                       # synth a tiny exit(42) .bin
-./scripts/monolink.sh upload /dev/cu.usbmodem* /tmp/exit42.bin   # ship + run + read RESULT
+# Build for the host's board (default is lm3s6965evb; pass --no-default-features --features lpc1768 for hardware).
+cargo build --release -p examples --bin exit42
+
+# Pack the ELF into a monoexec .bin (32-byte header + flat body).
+./scripts/monolink.sh pack target/thumbv7m-none-eabi/release/exit42 /tmp/exit42.bin
+
+# Ship to a running kernel and print the RESULT frame.
+./scripts/monolink.sh upload /dev/cu.usbmodem* /tmp/exit42.bin
+# status=OK exit=0x0000002a cycles=4738 cclk_hz=96000000 (49.4 us)
 ```
 
-For QEMU testing point it at the PTY printed by `qemu -serial pty` instead of the USB-CDC device.
+For QEMU testing point `upload` at the PTY printed by `qemu -serial pty` instead of the USB-CDC device.
+
+The `examples/` set also includes `spin` (timeout test), `naughty` (MemManage test), and `hello` (`time_cycles` round-trip). See [`docs/runtime.md`](docs/runtime.md) for the syscall ABI, executable format, and wire protocol.
 
 ## Layout
 
@@ -81,8 +90,17 @@ kernel/
 monolink-proto/            # no_std crate shared by kernel + host: frame types,
 └── src/lib.rs             # ExecHeader, ResultFrame, CRC32, parser, NakReason
 
+userlib/                   # compile-side counterpart: syscall shims, entry!
+├── src/lib.rs             # macro, default panic_handler.
+├── user.x.in              # linker-script template; build.rs substitutes
+└── build.rs               # USER_CODE_BASE / USER_DATA_BASE per board.
+
+examples/                  # canonical user programs: exit42, spin (timeout),
+└── src/bin/               # naughty (memfault), hello (time_cycles).
+
 tools/monolink/            # host loader (excluded from the firmware workspace,
-└── src/main.rs            # builds for the host triple). nix-based termios + poll.
+└── src/main.rs            # builds for the host triple). nix-based termios +
+                           # poll; `pack` reads ELFs via the `object` crate.
 
 probe-rs-targets/
 └── LPC1700_Series.yaml    # chip target generated from Keil.LPC1700_DFP,
