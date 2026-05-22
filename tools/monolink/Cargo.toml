@@ -4,14 +4,25 @@ version = "0.1.0"
 edition = "2024"
 description = "Host loader for the monolink wire protocol — ships a .bin to the device and prints the RESULT."
 
+[lib]
+name = "monolink"
+path = "src/lib.rs"
+
 [[bin]]
 name = "monolink"
-path = "src/main.rs"
+path = "src/bin/monolink.rs"
+required-features = ["cli", "posix-transport"]
+
+[features]
+default = ["cli", "posix-transport"]
+cli = ["dep:clap"]
+posix-transport = ["dep:nix", "dep:libc"]
 
 [dependencies]
 anyhow = "1"
-clap = { version = "4", features = ["derive"] }
-libc = "0.2"
 monolink-proto = { path = "../../monolink-proto" }
-nix = { version = "0.30", features = ["poll", "term"] }
 object = { version = "0.36", default-features = false, features = ["read_core", "elf", "std"] }
+
+clap = { version = "4", features = ["derive"], optional = true }
+nix = { version = "0.30", features = ["poll", "term"], optional = true }
+libc = { version = "0.2", optional = true }
