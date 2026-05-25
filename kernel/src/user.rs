@@ -64,26 +64,37 @@ use crate::{clock, mpu, time, timeout};
 
 // ---- per-board layout -------------------------------------------------------
 
+// Per-board addresses. The user regions are 8 KiB text + 8 KiB data + 16 KiB
+// stack = 32 KiB total, with the stack at the top of the user window. The
+// MPU rules require natural power-of-two alignment matching the region
+// size — see `mpu::USER_*_SIZE_LOG2` for what each base must satisfy.
+//
+// On the LPC1768 we put the user regions in the two AHB SRAM banks
+// (0x2007_C000 + 0x2008_0000) so the kernel keeps the full 32 KiB local
+// SRAM at 0x1000_0000 for itself. User code therefore runs from AHB SRAM
+// rather than local SRAM; this is consistent run-to-run, but absolute
+// cycle counts differ from any pre-bump measurements.
+
 #[cfg(feature = "lpc1768")]
 mod layout {
-    pub const USER_TEXT_BASE: u32 = 0x1000_4000;
-    pub const USER_DATA_BASE: u32 = 0x1000_5000;
-    pub const USER_STACK_BASE: u32 = 0x1000_6000;
-    pub const USER_STACK_TOP: u32 = 0x1000_8000;
+    pub const USER_TEXT_BASE: u32 = 0x2007_C000; // AHB SRAM0 base
+    pub const USER_DATA_BASE: u32 = 0x2007_E000;
+    pub const USER_STACK_BASE: u32 = 0x2008_0000; // AHB SRAM1 base (16 KiB-aligned)
+    pub const USER_STACK_TOP: u32 = 0x2008_4000;
 }
 
 #[cfg(feature = "lm3s6965evb")]
 mod layout {
-    pub const USER_TEXT_BASE: u32 = 0x2000_C000;
-    pub const USER_DATA_BASE: u32 = 0x2000_D000;
-    pub const USER_STACK_BASE: u32 = 0x2000_E000;
+    pub const USER_TEXT_BASE: u32 = 0x2000_8000;
+    pub const USER_DATA_BASE: u32 = 0x2000_A000;
+    pub const USER_STACK_BASE: u32 = 0x2000_C000;
     pub const USER_STACK_TOP: u32 = 0x2001_0000;
 }
 
 pub use layout::*;
 
-pub const USER_TEXT_SIZE: usize = 0x1000;
-pub const USER_DATA_SIZE: usize = 0x1000;
+pub const USER_TEXT_SIZE: usize = 0x2000;
+pub const USER_DATA_SIZE: usize = 0x2000;
 
 // ---- public API -------------------------------------------------------------
 

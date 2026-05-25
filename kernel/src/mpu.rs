@@ -37,12 +37,12 @@ const AP_PRIV_RW_UNPRIV_RW: u32 = 0b011;
 // Layout: TEX=0b000 [21:19], S=0 [18], C=1 [17], B=1 [16].
 const ATTRS_NORMAL_WB: u32 = (1 << 17) | (1 << 16);
 
-/// Region 0 carries the user `.text` and is fixed at 4 KiB.
-const USER_TEXT_SIZE_LOG2: u32 = 12;
-/// Region 1 carries `.data` + `.bss` and is fixed at 4 KiB.
-const USER_DATA_SIZE_LOG2: u32 = 12;
-/// Region 2 carries the user stack and is fixed at 8 KiB.
-const USER_STACK_SIZE_LOG2: u32 = 13;
+/// Region 0 carries the user `.text` and is fixed at 8 KiB.
+const USER_TEXT_SIZE_LOG2: u32 = 13;
+/// Region 1 carries `.data` + `.bss` and is fixed at 8 KiB.
+const USER_DATA_SIZE_LOG2: u32 = 13;
+/// Region 2 carries the user stack and is fixed at 16 KiB.
+const USER_STACK_SIZE_LOG2: u32 = 14;
 
 /// Program the three user regions and turn the MPU on.
 ///

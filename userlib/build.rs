@@ -27,13 +27,15 @@ struct Layout {
 
 // Mirrored from kernel/src/user.rs.
 const TRAMPOLINE_LEN: u32 = 12;
-const USER_TEXT_SIZE: u32 = 0x1000;
-const USER_DATA_SIZE: u32 = 0x1000;
+const USER_TEXT_SIZE: u32 = 0x2000;
+const USER_DATA_SIZE: u32 = 0x2000;
 
 fn layout_for(board: &str) -> Layout {
     let (text_base, data_base) = match board {
-        "lpc1768" => (0x1000_4000_u32, 0x1000_5000_u32),
-        "lm3s6965evb" => (0x2000_C000_u32, 0x2000_D000_u32),
+        // lpc1768 user regions live in AHB SRAM banks 0+1 so the kernel
+        // keeps the full 32 KiB local SRAM at 0x1000_0000 for itself.
+        "lpc1768" => (0x2007_C000_u32, 0x2007_E000_u32),
+        "lm3s6965evb" => (0x2000_8000_u32, 0x2000_A000_u32),
         other => panic!("unknown board feature `{other}`"),
     };
     Layout {
