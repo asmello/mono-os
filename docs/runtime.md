@@ -25,32 +25,38 @@ produce the same cycle count.
 
 Supported boards:
 
-| Board           | Use                                  |
-|-----------------|--------------------------------------|
-| `lm3s6965evb`   | QEMU emulation — the fast dev loop.  |
-| LPC1768 (mbed)  | Real hardware. 96 MHz, 32 KiB SRAM.  |
+| Board           | Use                                                       |
+|-----------------|-----------------------------------------------------------|
+| `lm3s6965evb`   | QEMU emulation — the fast dev loop.                       |
+| LPC1768 (mbed)  | Real hardware. 96 MHz, 64 KiB SRAM (32 K local + 2×16 K AHB). |
 
 ## Memory layout
 
-The kernel splits SRAM in half: kernel side has the MSP, .data, and .bss;
-user side is carved into three power-of-2 MPU regions:
+The kernel claims one 32 KiB SRAM bank for itself (MSP, `.data`, `.bss`);
+user code gets a separate 32 KiB window carved into three power-of-2 MPU
+regions. On LPC1768 those regions live in the two AHB SRAM banks at
+`0x2007_C000` and `0x2008_0000`, leaving the full 32 KiB local SRAM
+(`0x1000_0000`) for the kernel.
 
 ```
-0x1000_0000 ┬─────────────────────────┐
-            │ kernel .data / .bss      │
-            │ + MSP (kernel stack)     │ 16 KiB  kernel-private
-0x1000_4000 ┼─────────────────────────┤
-            │ user .text (R+X)         │  4 KiB  MPU region 0 (unpriv RX)
-0x1000_5000 ┼─────────────────────────┤
-            │ user .data / .bss        │  4 KiB  MPU region 1 (unpriv RW, XN)
-0x1000_6000 ┼─────────────────────────┤
-            │ user stack (PSP)         │  8 KiB  MPU region 2 (unpriv RW, XN)
-0x1000_8000 ┴─────────────────────────┘
+0x2007_C000 ┬─────────────────────────┐
+            │ user .text (R+X)         │  8 KiB  MPU region 0 (unpriv RX)
+0x2007_E000 ┼─────────────────────────┤
+            │ user .data / .bss        │  8 KiB  MPU region 1 (unpriv RW, XN)
+0x2008_0000 ┼─────────────────────────┤
+            │ user stack (PSP)         │ 16 KiB  MPU region 2 (unpriv RW, XN)
+0x2008_4000 ┴─────────────────────────┘
 ```
 
-(LPC1768 addresses. On `lm3s6965evb` the user split lives at
-`0x2000_C000`..`0x2001_0000`; the kernel side gets the slack since QEMU's
-SRAM is 64 KiB.)
+(LPC1768 addresses. On `lm3s6965evb` the user window lives at
+`0x2000_8000`..`0x2001_0000` in the single SRAM bank; same 8 / 8 / 16 KiB
+split, kernel keeps `0x2000_0000`..`0x2000_8000`. Both boards' user-side
+offsets are identical relative to `USER_TEXT_BASE`.)
+
+Because user code on LPC1768 executes from AHB SRAM rather than the
+CPU-local data bus, absolute cycle counts differ from any pre-`6de4a31`
+measurements. Timings are still bit-exact run-to-run on the same
+hardware; they're just not comparable to pre-bump baselines.
 
 `PRIVDEFENA = 1` gives privileged (kernel) code a flat background view of
 the whole address space, so kernel-visible regions don't need to be
@@ -87,8 +93,8 @@ struct ExecHeader {
 }
 ```
 
-Sizes must satisfy `text_size ≤ 4 KiB - 12` and
-`data_size + bss_size ≤ 4 KiB`. The kernel rejects anything else with a
+Sizes must satisfy `text_size ≤ 8 KiB - 12` and
+`data_size + bss_size ≤ 8 KiB`. The kernel rejects anything else with a
 NAK before execution.
 
 The header is an **internal contract** between the kernel and the
