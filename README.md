@@ -4,6 +4,8 @@ A small Cortex-M3 runtime that loads one precompiled program at a time, runs it 
 
 The repo started as a port of Phil Opp's [Writing an OS in Rust](https://os.phil-opp.com/) to Cortex-M; the deterministic-single-program runtime is what it's grown into. Architecture is documented in [`docs/runtime.md`](docs/runtime.md); the original port plan is preserved at [`docs/history/arm-port.md`](docs/history/arm-port.md).
 
+> **Work in progress.** mono-os is the runtime half of a two-repo project — the judging service and web frontend that sit in front of it live in [`exact`](https://github.com/asmello/exact). Everything listed under [Status](#status) works today, but the pair is under active development and not production-hardened; the `monolink` wire protocol and syscall ABI are pre-1.0 and may still change.
+
 ## Status
 
 - Boot via `cortex-m-rt` (vector table + reset handler).
