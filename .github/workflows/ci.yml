@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: os
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: DeterminateSystems/nix-installer-action@v22
+
+      - uses: DeterminateSystems/magic-nix-cache-action@v13
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo build
+        run: nix develop --command cargo build
+
+      - name: cargo clippy
+        run: nix develop --command cargo clippy --all-targets -- -D warnings
+
+      - name: cargo fmt --check
+        run: nix develop --command cargo fmt --all -- --check
+
+      - name: nix flake check
+        working-directory: ${{ github.workspace }}
+        run: nix flake check

@@ -1,0 +1,16 @@
+[package]
+name = "umami-os"
+version = "0.1.0"
+edition = "2024"
+
+# no deps on test and bench since they depend on stdlib
+# compiling thusly with --all-targets gives errors, e.g.,
+# panic handler defined twice
+[[bin]]
+bench = false
+name = "umami-os"
+test = false
+
+[dependencies]
+# TODO: can we use a newer version?
+bootloader = "0.9"

@@ -1,0 +1,8 @@
+# Allow the directories but ignore the EFL files themselves
+!**/exit/
+exit
+exit0
+!**/hello/
+hello
+hello0
+*.o

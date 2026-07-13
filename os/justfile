@@ -1,0 +1,7 @@
+default: x86_64
+
+x86_64:
+    cargo run --target x86_64-umami_os.json
+
+build:
+    cargo build --target thumbv7em-none-eabihf
