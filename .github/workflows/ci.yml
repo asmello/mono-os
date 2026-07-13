@@ -11,9 +11,6 @@ env:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: os
     steps:
       - uses: actions/checkout@v6
 
@@ -33,5 +30,4 @@ jobs:
         run: nix develop --command cargo fmt --all -- --check
 
       - name: nix flake check
-        working-directory: ${{ github.workspace }}
         run: nix flake check
