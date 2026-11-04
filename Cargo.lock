@@ -69,13 +69,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "examples"
-version = "0.1.0"
-dependencies = [
- "userlib",
-]
-
-[[package]]
 name = "kernel"
 version = "0.1.0"
 dependencies = [
@@ -103,6 +96,13 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
+]
+
+[[package]]
+name = "mono-examples"
+version = "0.1.0"
+dependencies = [
+ "userlib",
 ]
 
 [[package]]

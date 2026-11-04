@@ -45,7 +45,7 @@ Single-shot (no input):
 
 ```sh
 # Build for the host's board (default is lm3s6965evb; pass --no-default-features --features lpc1768 for hardware).
-cargo build --release -p examples --bin exit42
+cargo build --release -p mono-examples --bin exit42
 
 # Pack the ELF into a monoexec .bin (32-byte header + flat body).
 ./scripts/monolink.sh pack target/thumbv7m-none-eabi/release/exit42 /tmp/exit42.bin
@@ -60,7 +60,7 @@ cargo build --release -p examples --bin exit42
 Case-driven (one program, many inputs):
 
 ```sh
-cargo build --release -p examples --bin sum_to_n
+cargo build --release -p mono-examples --bin sum_to_n
 ./scripts/monolink.sh pack target/thumbv7m-none-eabi/release/sum_to_n /tmp/sum_to_n.bin
 
 # Cases file: a sequence of [u16 LE length][bytes] records.
