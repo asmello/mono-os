@@ -39,7 +39,7 @@
               nativeBuildInputs = [ nightlyToolChain ];
             }
             ''
-              cd ${./os}
+              cd ${./.}
               cargo fmt --check
               touch $out
             '';

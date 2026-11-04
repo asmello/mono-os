@@ -23,8 +23,15 @@ jobs:
       - name: cargo build
         run: nix develop --command cargo build
 
+      # The workspace builds for thumbv7m-none-eabi (.cargo/config.toml), where
+      # `--all-targets` tries to build libtest-based test harnesses for crates
+      # that have none (E0463: can't find crate for `test`). Lint every
+      # lib/bin/example in the workspace, and all targets (including the
+      # custom-harness tests) of the kernel, which does have tests.
       - name: cargo clippy
-        run: nix develop --command cargo clippy --all-targets -- -D warnings
+        run: |
+          nix develop --command cargo clippy --workspace --lib --bins --examples -- -D warnings
+          nix develop --command cargo clippy -p kernel --all-targets -- -D warnings
 
       - name: cargo fmt --check
         run: nix develop --command cargo fmt --all -- --check
