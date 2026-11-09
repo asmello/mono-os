@@ -18,7 +18,7 @@ cortex-m.workspace = true
 # its placeholder `__INTERRUPTS` so that each board's PAC can supply the real
 # vector table and weak-alias `device.x`.
 cortex-m-rt.workspace = true
-cortex-m-semihosting = "0.5"
+cortex-m-semihosting = "0.6"
 lm3s6965 = { version = "0.2", optional = true }
 lpc176x = { path = "../lpc176x", optional = true }
 monolink-proto = { path = "../monolink-proto" }
